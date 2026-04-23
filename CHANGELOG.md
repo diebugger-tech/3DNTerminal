@@ -5,7 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - Refactoring & Stabilization (Unreleased)
+## [0.2.1] - 2026-04-24
+### Added
+- **Window Controls**: Modular button system for Minimize, Maximize, and Close with hover states and tooltips.
+- **3D Hit-Testing**: Perspective-aware mouse interaction for precise control on the holographic plane.
+- **Tracing & Logging**: Integrated `tracing` crate with configurable log levels (`RUST_LOG`).
+- **Feature Flags**: Modular build support for `logging`, `3d-effects`, and `experimental`.
+- **Message Refactoring**: Unified `Message` system moved to `src/app/events.rs`.
+
+### Changed
+- Improved button rendering with Unicode icons ("−", "□", "×").
+- Refined PTY lifecycle logging and error reporting.
+
+## [0.2.0] - Refactoring & Stabilization
 
 ### Added
 - **Configuration Builder**: `src/config.rs` added with robust builder pattern, TOML serialization, and validation.
