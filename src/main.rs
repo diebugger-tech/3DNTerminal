@@ -13,6 +13,7 @@ use cosmic::{
         widget::{
             canvas::{self, Cache, Canvas, Frame, Geometry, Path, Stroke},
             mouse_area,
+            stack, image,
         },
         Rectangle, Point, Size, Color, Pixels,
     },
@@ -48,15 +49,49 @@ pub enum AnimationPhase {
     Collapsing,
 }
 
+use std::sync::mpsc;
+
+struct EffectEngine {
+    receiver: mpsc::Receiver<Vec<u8>>,
+}
+
+impl EffectEngine {
+    fn start(width: u32, height: u32) -> Self {
+        let (tx, rx) = mpsc::channel();
+        tokio::task::spawn_blocking(move || {
+            let mut crossfade = CrossfadeManager::new(width, height);
+            let mut bg_pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
+            let mut last_update = Instant::now();
+            
+            loop {
+                let now = Instant::now();
+                let dt = now.duration_since(last_update).as_secs_f32();
+                last_update = now;
+                
+                crossfade.tick(dt, &mut bg_pixmap.as_mut());
+                if tx.send(bg_pixmap.data().to_vec()).is_err() {
+                    break;
+                }
+                
+                // Limitiere den Background-Thread auf ~60 FPS
+                std::thread::sleep(Duration::from_millis(16));
+            }
+        });
+        Self { receiver: rx }
+    }
+}
+
 pub struct App {
     core: Core,
-    crossfade: CrossfadeManager,
     cache: Cache,
-    
     // --- Terminal State ---
     terminal_engine: terminal::TerminalEngine,
     terminal_lines: VecDeque<(String, Color)>,
     is_new_line: bool,
+
+    // --- Background Effects ---
+    effect_engine: EffectEngine,
+    bg_handle: Option<image::Handle>,
 
     // --- Animation State ---
     phase: AnimationPhase,
@@ -257,13 +292,14 @@ impl Application for App {
 
         let app = App {
             core,
-            crossfade: CrossfadeManager::new(1280, 720),
+            effect_engine: EffectEngine::start(1280, 720),
             terminal_engine,
             terminal_lines: VecDeque::new(),
             is_new_line: true,
             last_update: Instant::now(),
             start_time: Instant::now(),
             cache: Cache::new(),
+            bg_handle: None,
             phase: AnimationPhase::Expanded,
             progress: 1.0,
             // Standard Positionen
@@ -288,6 +324,16 @@ impl Application for App {
                     }
                 }
                 
+                // --- UPDATE BACKGROUND EFFECTS ---
+                // Der Background-Thread schickt uns fertige Frames. Wir nehmen immer das aktuellste.
+                while let Ok(frame_data) = self.effect_engine.receiver.try_recv() {
+                    self.bg_handle = Some(image::Handle::from_rgba(
+                        1280,
+                        720,
+                        frame_data
+                    ));
+                }
+
                 // PTY Polling
                 if let Some(rx) = &self.terminal_engine.receiver {
                     while let Ok(msg) = rx.try_recv() {
@@ -394,8 +440,22 @@ impl Application for App {
             .width(Length::Fill)
             .height(Length::Fill);
 
+        let mut layers: Vec<Element<'_, Message>> = Vec::new();
+        
+        // Hintergrund-Effekte rendern (falls vorhanden)
+        if let Some(handle) = &self.bg_handle {
+            let img = image(handle.clone())
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .content_fit(cosmic::iced::ContentFit::Fill);
+            layers.push(img.into());
+        }
+        
+        // Canvas (Hologramm) drüberlegen
+        layers.push(canvas.into());
+
         mouse_area(
-            container(canvas)
+            container(stack(layers))
                 .width(Length::Fill)
                 .height(Length::Fill)
         )

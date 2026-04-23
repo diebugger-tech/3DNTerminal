@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
 pub mod neural;
 pub mod circuit;
 pub mod binary_rain;
