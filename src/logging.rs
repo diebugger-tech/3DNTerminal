@@ -1,9 +1,14 @@
 #[cfg(feature = "logging")]
 pub fn init() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+    use tracing_subscriber::{fmt, EnvFilter};
+    
+    fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::DEBUG.into()))
+        .with_target(false)
+        .with_thread_ids(true)
         .init();
-    tracing::info!("Logging initialized");
+    
+    tracing::info!("3DNTerminal v0.2.1 initialized - Logging Active");
 }
 
 #[cfg(not(feature = "logging"))]

@@ -43,6 +43,8 @@ impl TerminalEngine {
             return Ok(());
         }
 
+        tracing::info!("Spawning shell (/bin/bash) with size {}x{}", self.cols, self.rows);
+
         let pty_system = native_pty_system();
         let pair = pty_system.openpty(PtySize {
             rows: self.rows,
@@ -76,16 +78,23 @@ impl TerminalEngine {
 
             loop {
                 match reader.read(&mut buf) {
-                    Ok(0) => break,
-                    Ok(n) => {
-                        let mut grid = grid_clone.lock().unwrap();
-                        parser.advance(&mut *grid, &buf[..n]);
-                        // Lock is dropped here, allowing GUI to render
+                    Ok(0) => {
+                        tracing::info!("PTY reader reached EOF");
+                        break;
                     }
-                    Err(_) => break,
+                    Ok(n) => {
+                        if let Ok(mut grid) = grid_clone.lock() {
+                            parser.advance(&mut *grid, &buf[..n]);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("PTY reader error: {}", e);
+                        break;
+                    }
                 }
             }
             let _ = child.wait();
+            tracing::info!("Shell process exited");
         });
 
         self._task = Some(task);
