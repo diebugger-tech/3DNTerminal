@@ -1,38 +1,29 @@
 [package]
-name = "3d-n-terminal"
+name = "threednterminal"
 version = "0.1.0"
 edition = "2021"
-authors = ["doko1975"]
+
+[[bin]]
+name = "3dnterm"
+path = "src/main.rs"
 
 [dependencies]
-bevy = { version = "0.14", optional = true }
-nannou = { version = "0.19", optional = true }
-wgpu = { version = "0.19", optional = true }
-glam = "0.27"
+libcosmic = { git = "https://github.com/pop-os/libcosmic", features = ["winit", "wgpu"] }
+portable-pty = "0.8"
+tiny-skia = "0.11"
+tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-[[bin]]
-name = "bevy-app"
-path = "src/bin/bevy.rs"
-required-features = ["bevy-feature"]
-
-[[bin]]
-name = "nannou-app"
-path = "src/bin/nannou.rs"
-required-features = ["nannou-feature"]
-
-[[bin]]
-name = "wgpu-app"
-path = "src/bin/wgpu.rs"
-required-features = ["wgpu-feature"]
+toml = "0.8"
+rand = "0.8"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
 
 [features]
-default = ["bevy-feature"]
-bevy-feature = ["bevy"]
-nannou-feature = ["nannou"]
-wgpu-feature = ["wgpu"]
+default = []
+effects-3d = []
 
 [profile.release]
 opt-level = 3
 lto = true
+codegen-units = 1
