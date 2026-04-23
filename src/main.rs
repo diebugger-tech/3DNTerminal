@@ -19,22 +19,9 @@ use cosmic::{
 };
 use threednterminal::effects::crossfade::CrossfadeManager;
 use threednterminal::terminal::traits::Terminal;
-use threednterminal::{terminal, ui, config, effects, AnimationPhase};
+use threednterminal::{terminal, ui, config, AnimationPhase};
 
-#[derive(Debug, Clone)]
-pub enum Message {
-    Tick(Instant),
-    ToggleTerminal,
-    KeyPressed(keyboard::Key, keyboard::Modifiers, Option<String>),
-    Scroll(f32),
-    WindowResized(f32, f32),
-    CursorMoved(Point),
-    MouseClicked(Instant),
-    TerminalClosed,
-    MinimizeTerminal,
-    MaximizeTerminal,
-    CloseApp,
-}
+use threednterminal::app::events::Message;
 
 
 use std::sync::mpsc;
@@ -94,6 +81,9 @@ pub struct App {
     // Config
     corner_rect: Rectangle,
     center_rect: Rectangle,
+    
+    // UI Components
+    window_controls: ui::window_controls::WindowControls,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -115,6 +105,7 @@ impl canvas::Program<Message, Theme> for App {
                 corner_rect: self.corner_rect,
                 center_rect: self.center_rect,
                 cursor_visible: self.cursor_visible,
+                window_controls: Some(&self.window_controls),
             };
             
             let (_, _, alpha) = ui::hologram::calculate_3d_geometry(&params);
@@ -163,6 +154,7 @@ impl Application for App {
             // Ecke unten-rechts (mit kleinem Abstand zum Rand) und deutlich kompakter als das große Fenster
             corner_rect: Rectangle::new(Point::new(1280.0 - 450.0, 720.0 - 300.0), Size::new(400.0, 250.0)),
             center_rect: Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82)),
+            window_controls: ui::window_controls::WindowControls::new(),
         };
         (app, Task::none())
     }
@@ -210,22 +202,41 @@ impl Application for App {
                 if needs_redraw {
                     self.cache.clear();
                 }
+
+                // Update Window Controls positions based on current quad
+                let params = ui::hologram::HologramParams {
+                    phase: self.phase,
+                    progress: self.progress,
+                    start_time: self.start_time,
+                    corner_rect: self.corner_rect,
+                    center_rect: self.center_rect,
+                    cursor_visible: self.cursor_visible,
+                    window_controls: None,
+                };
+                let quad = ui::hologram::get_quad(&params);
+                // Top-right corner of the hologram is quad[1]
+                // We want the buttons to follow the 3D perspective
+                // For now, we'll position them near quad[1] (top-right)
+                let button_size = (quad[1].x - quad[0].x).abs() * 0.05;
+                let button_size = button_size.clamp(15.0, 30.0);
+                self.window_controls.update_positions(quad[1], button_size, button_size * 0.2);
             }
             Message::ToggleTerminal => {
+                let old_phase = self.phase;
                 if self.phase == AnimationPhase::Collapsed {
                     self.phase = AnimationPhase::Expanding;
                     self.progress = 0.0;
-                    // Shell bleibt aktiv, wir rufen nicht mehr spawn_shell() auf
                 } else if self.phase == AnimationPhase::Expanded {
                     self.phase = AnimationPhase::Collapsing;
                     self.progress = 0.0;
-                    // Shell bleibt aktiv, wir rufen nicht mehr kill_shell() auf
-                    // Der Text bleibt in der Ecke sichtbar
                 }
+                tracing::info!("ToggleTerminal: {:?} -> {:?}", old_phase, self.phase);
                 self.cache.clear();
             }
             Message::KeyPressed(key, modifiers, _text) => {
+                tracing::debug!("KeyPressed: {:?} (mods: {:?})", key, modifiers);
                 if key == self.config.flip_key {
+                    let old_phase = self.phase;
                     if self.phase == AnimationPhase::Collapsed {
                         self.phase = AnimationPhase::Expanding;
                         self.progress = 0.0;
@@ -233,6 +244,7 @@ impl Application for App {
                         self.phase = AnimationPhase::Collapsing;
                         self.progress = 0.0;
                     }
+                    tracing::info!("FlipKey Triggered: {:?} -> {:?}", old_phase, self.phase);
                     self.cache.clear();
                     return Task::none();
                 }
@@ -278,6 +290,26 @@ impl Application for App {
             }
             Message::CursorMoved(pos) => {
                 self.cursor_pos = pos;
+                
+                let params = ui::hologram::HologramParams {
+                    phase: self.phase,
+                    progress: self.progress,
+                    start_time: self.start_time,
+                    corner_rect: self.corner_rect,
+                    center_rect: self.center_rect,
+                    cursor_visible: self.cursor_visible,
+                    window_controls: None,
+                };
+                let quad = ui::hologram::get_quad(&params);
+                
+                if let Some((u, v)) = ui::math::project_onto_quad(pos, &quad) {
+                    self.window_controls.update_hover(u, v);
+                    self.cache.clear();
+                } else {
+                    self.window_controls.minimize_btn.set_hover(false);
+                    self.window_controls.maximize_btn.set_hover(false);
+                    self.window_controls.close_btn.set_hover(false);
+                }
             }
             Message::MouseClicked(now) => {
                 let is_double_click = now.duration_since(self.last_click_time) < Duration::from_millis(300);
@@ -290,30 +322,46 @@ impl Application for App {
                     corner_rect: self.corner_rect,
                     center_rect: self.center_rect,
                     cursor_visible: self.cursor_visible,
+                    window_controls: None,
                 };
                 let quad = ui::hologram::get_quad(&params);
-                if ui::math::is_point_in_quad(self.cursor_pos, &quad) {
+                
+                if let Some((u, v)) = ui::math::project_onto_quad(self.cursor_pos, &quad) {
+                    if let Some(msg) = self.window_controls.handle_click(u, v) {
+                        tracing::info!("Button clicked: {:?}", msg);
+                        return Task::perform(async move { msg }, |m| cosmic::Action::App(m));
+                    }
+
                     if self.phase == AnimationPhase::Collapsed {
+                        tracing::info!("Terminal expanded via click");
                         self.phase = AnimationPhase::Expanding;
                         self.progress = 0.0;
                         self.cache.clear();
                     } else if self.phase == AnimationPhase::Expanded {
-                        if is_double_click {
+                        if is_double_click || v < 0.1 { // Header click or double click
+                            tracing::info!("Terminal collapsed via header click/double-click");
                             self.phase = AnimationPhase::Collapsing;
                             self.progress = 0.0;
                             self.cache.clear();
-                        } else {
-                            let min_y = quad[0].y.min(quad[1].y);
-                            let max_y = quad[3].y.max(quad[2].y);
-                            let height = max_y - min_y;
-                            if self.cursor_pos.y < min_y + height * 0.15 { // Top 15% header click
-                                self.phase = AnimationPhase::Collapsing;
-                                self.progress = 0.0;
-                                self.cache.clear();
-                            }
                         }
                     }
                 }
+            }
+            Message::MinimizeTerminal => {
+                tracing::info!("Message: MinimizeTerminal");
+                if self.phase == AnimationPhase::Expanded {
+                    self.phase = AnimationPhase::Collapsing;
+                    self.progress = 0.0;
+                    self.cache.clear();
+                }
+            }
+            Message::MaximizeTerminal => {
+                tracing::info!("Message: MaximizeTerminal (Reserved)");
+            }
+            Message::CloseApp => {
+                tracing::info!("Message: CloseApp - Shutting down");
+                // In a real app, we might want to send a close request to the window manager
+                std::process::exit(0);
             }
             Message::TerminalClosed => {}
         }

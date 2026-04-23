@@ -72,8 +72,8 @@ impl Button {
             position: Point::new(self.x + self.width / 2.0, self.y + self.height / 2.0),
             color,
             size: Pixels(font_size),
-            horizontal_alignment: cosmic::iced::alignment::Horizontal::Center,
-            vertical_alignment: cosmic::iced::alignment::Vertical::Center,
+            align_x: cosmic::iced::alignment::Horizontal::Center.into(),
+            align_y: cosmic::iced::alignment::Vertical::Center.into(),
             ..Default::default()
         });
 

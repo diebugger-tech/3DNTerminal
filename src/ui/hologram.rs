@@ -5,13 +5,14 @@ use crate::terminal::grid::TerminalGrid;
 use crate::AnimationPhase;
 use super::math;
 
-pub struct HologramParams {
+pub struct HologramParams<'a> {
     pub phase: AnimationPhase,
     pub progress: f32,
     pub start_time: Instant,
     pub corner_rect: Rectangle,
     pub center_rect: Rectangle,
     pub cursor_visible: bool,
+    pub window_controls: Option<&'a crate::ui::window_controls::WindowControls>,
 }
 
 pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
@@ -132,6 +133,14 @@ pub fn draw(
                 Size::new(box_w, font_size * 1.5),
                 Color::from_rgba(0.4, 1.0, 0.8, 0.2 * border_alpha * flip_alpha)
             );
+
+            if let Some(controls) = params.window_controls {
+                // We need to update button positions based on current 3D geometry
+                // For simplicity, we draw them in the projected space
+                // This is a bit tricky with the current Button::draw which expects absolute coords.
+                // However, since we are in the canvas frame, we can just draw them.
+                controls.draw(frame, border_alpha * flip_alpha);
+            }
         }
 
         if let Ok(grid) = grid_mutex.lock() {
