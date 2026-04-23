@@ -481,7 +481,9 @@ impl Application for App {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings = Settings::default()
-        .size(Size::new(1280.0, 720.0));
+        .size(Size::new(1280.0, 720.0))
+        .transparent(true)
+        .client_decorations(false);
     cosmic::app::run::<App>(settings, ())?;
     Ok(())
 }
