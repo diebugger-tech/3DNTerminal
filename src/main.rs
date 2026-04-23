@@ -21,7 +21,6 @@ use cosmic::{
     widget::container,
 };
 use effects::crossfade::CrossfadeManager;
-use terminal::TextColor;
 
 // --- Easing Helper ---
 fn cubic_bezier(t: f32) -> f32 {
@@ -86,8 +85,6 @@ pub struct App {
     cache: Cache,
     // --- Terminal State ---
     terminal_engine: terminal::TerminalEngine,
-    terminal_lines: VecDeque<(String, Color)>,
-    is_new_line: bool,
 
     // --- Background Effects ---
     effect_engine: EffectEngine,
@@ -250,26 +247,48 @@ impl App {
 
             // --- TERMINAL OUTPUT ---
             // Wir zeigen ausschließlich den echten Output vom PTY (keine künstlichen Elemente)
-            if !self.terminal_lines.is_empty() {
-                let start_y = p4.y - margin_y; // Beginne ganz unten
-                let mut current_y = start_y;
-                let top_limit = p1.y + margin_y + (font_size * 3.0); // Platz für Top Zone lassen
+            if let Ok(grid) = self.terminal_engine.grid.lock() {
+                let start_y = p1.y + margin_y + (font_size * 2.0); // Platz für Top Zone
                 
-                for (text, color) in &self.terminal_lines {
-                    let mut c = *color;
-                    c.a *= text_alpha; // Fade beim Flip anwenden
-
-                    frame.fill_text(canvas::Text {
-                        content: text.clone(),
-                        position: Point::new(p1.x + margin_x, current_y),
-                        color: c,
-                        size: Pixels(font_size),
-                        ..canvas::Text::default()
-                    });
-
-                    current_y -= line_height;
-                    if current_y < top_limit {
-                        break; // Text-Clipping oben (Middle Zone endet hier)
+                for y in 0..grid.rows {
+                    let current_y = start_y + (y as f32 * line_height);
+                    
+                    if current_y > p4.y - margin_y {
+                        break; // Text-Clipping unten
+                    }
+                    
+                    for x in 0..grid.cols {
+                        let cell = grid.cells[y][x];
+                        if cell.char == ' ' && cell.bg == Color::TRANSPARENT {
+                            continue;
+                        }
+                        
+                        // Approx character width
+                        let char_width = font_size * 0.6;
+                        let pos = Point::new(p1.x + margin_x + (x as f32 * char_width), current_y);
+                        
+                        if cell.bg != Color::TRANSPARENT {
+                            let mut bg_c = cell.bg;
+                            bg_c.a *= text_alpha;
+                            frame.fill_rectangle(
+                                Point::new(pos.x, pos.y - font_size),
+                                Size::new(char_width, line_height),
+                                bg_c
+                            );
+                        }
+                        
+                        if cell.char != ' ' {
+                            let mut fg_c = cell.fg;
+                            fg_c.a *= text_alpha;
+                            frame.fill_text(canvas::Text {
+                                content: cell.char.to_string(),
+                                position: pos,
+                                color: fg_c,
+                                size: Pixels(font_size),
+                                font: cosmic::iced::Font::MONOSPACE,
+                                ..canvas::Text::default()
+                            });
+                        }
                     }
                 }
             }
@@ -294,8 +313,6 @@ impl Application for App {
             core,
             effect_engine: EffectEngine::start(1280, 720),
             terminal_engine,
-            terminal_lines: VecDeque::new(),
-            is_new_line: true,
             last_update: Instant::now(),
             start_time: Instant::now(),
             cache: Cache::new(),
@@ -334,41 +351,8 @@ impl Application for App {
                     ));
                 }
 
-                // PTY Polling
-                if let Some(rx) = &self.terminal_engine.receiver {
-                    while let Ok(msg) = rx.try_recv() {
-                        match msg {
-                            terminal::PtyMessage::UpdateLine(text, color) => {
-                                let iced_color = match color {
-                                    TextColor::Red => Color::from_rgb(1.0, 0.3, 0.3),
-                                    TextColor::Yellow => Color::from_rgb(1.0, 1.0, 0.3),
-                                    TextColor::Cyan => Color::from_rgb(0.3, 1.0, 1.0),
-                                    TextColor::Green => Color::from_rgb(0.3, 1.0, 0.3),
-                                    TextColor::White => Color::from_rgb(0.9, 0.9, 0.9),
-                                };
-                                
-                                if self.is_new_line || self.terminal_lines.is_empty() {
-                                    self.terminal_lines.push_front((text, iced_color));
-                                    self.is_new_line = false;
-                                } else {
-                                    if let Some(front) = self.terminal_lines.front_mut() {
-                                        *front = (text, iced_color);
-                                    }
-                                }
-                                
-                                if self.terminal_lines.len() > 30 {
-                                    self.terminal_lines.pop_back();
-                                }
-                            }
-                            terminal::PtyMessage::FinishLine => {
-                                self.is_new_line = true;
-                            }
-                            terminal::PtyMessage::Closed => {
-                                // Eventuell später neu starten oder UI updaten
-                            }
-                        }
-                    }
-                }
+                // PTY-State wird direkt aus dem Shared Grid in draw() gelesen
+
 
                 self.cache.clear(); // IMMER den Cache leeren, damit Hover & Pulse funktionieren
             }

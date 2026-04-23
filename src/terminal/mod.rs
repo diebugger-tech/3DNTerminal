@@ -1,30 +1,17 @@
+pub mod grid;
+
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
-use std::sync::mpsc::{self, Receiver};
+use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum TextColor {
-    Red,
-    Yellow,
-    Cyan,
-    Green,
-    White,
-}
-
-#[derive(Debug, Clone)]
-pub enum PtyMessage {
-    UpdateLine(String, TextColor),
-    FinishLine,
-    Closed,
-}
+use grid::TerminalGrid;
 
 pub struct TerminalEngine {
     pub cols: u16,
     pub rows: u16,
     pty_master: Option<Box<dyn MasterPty + Send>>,
     pty_writer: Option<Box<dyn Write + Send>>,
-    pub receiver: Option<Receiver<PtyMessage>>,
+    pub grid: Arc<Mutex<TerminalGrid>>,
     _task: Option<JoinHandle<()>>,
 }
 
@@ -35,7 +22,7 @@ impl TerminalEngine {
             rows,
             pty_master: None,
             pty_writer: None,
-            receiver: None,
+            grid: Arc::new(Mutex::new(TerminalGrid::new(cols as usize, rows as usize))),
             _task: None,
         }
     }
@@ -51,6 +38,7 @@ impl TerminalEngine {
                 pixel_height: 0,
             });
         }
+        // Resize grid will be done in Phase 2
     }
 
     pub fn spawn_shell(&mut self) {
@@ -92,82 +80,24 @@ impl TerminalEngine {
 
         self.pty_master = Some(master);
 
-        let (tx, rx) = mpsc::channel();
-        self.receiver = Some(rx);
+        let grid_clone = Arc::clone(&self.grid);
 
         let task = tokio::task::spawn_blocking(move || {
-            let mut buf = [0u8; 1024];
-            let mut line_buffer = String::new();
+            let mut buf = [0u8; 8192]; // Larger buffer for performance
+            let mut parser = vte::Parser::new();
 
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
                     Ok(n) => {
-                        let text = String::from_utf8_lossy(&buf[..n]);
-                        
-                        let mut chars = text.chars().peekable();
-                        let mut updated = false;
-
-                        while let Some(c) = chars.next() {
-                            if c == '\x1b' {
-                                if let Some(&next) = chars.peek() {
-                                    if next == '[' {
-                                        chars.next(); // Consume '['
-                                        while let Some(cc) = chars.next() {
-                                            if cc >= '@' && cc <= '~' {
-                                                // \x1b[K = Clear to end of line
-                                                if cc == 'K' {
-                                                    line_buffer.clear();
-                                                    updated = true;
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    } else if next == ']' {
-                                        chars.next(); // Consume ']'
-                                        while let Some(cc) = chars.next() {
-                                            if cc == '\x07' { break; }
-                                            if cc == '\x1b' {
-                                                if let Some(&next_st) = chars.peek() {
-                                                    if next_st == '\\' { chars.next(); }
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    } else {
-                                        chars.next(); 
-                                    }
-                                }
-                            } else if c == '\n' {
-                                let _ = tx.send(PtyMessage::FinishLine);
-                                line_buffer.clear();
-                                updated = false;
-                            } else if c == '\r' {
-                                if let Some(&'\n') = chars.peek() {
-                                    // ignore, \n handles it
-                                } else {
-                                    line_buffer.clear();
-                                    updated = true;
-                                }
-                            } else if c == '\x08' || c == '\x7f' {
-                                line_buffer.pop();
-                                updated = true;
-                            } else if c != '\x07' {
-                                line_buffer.push(c);
-                                updated = true;
-                            }
-                        }
-
-                        if updated {
-                            let color = determine_color(&line_buffer);
-                            let _ = tx.send(PtyMessage::UpdateLine(line_buffer.clone(), color));
-                        }
+                        let mut grid = grid_clone.lock().unwrap();
+                        parser.advance(&mut *grid, &buf[..n]);
+                        // Lock is dropped here, allowing GUI to render
                     }
                     Err(_) => break,
                 }
             }
             let _ = child.wait();
-            let _ = tx.send(PtyMessage::Closed);
         });
 
         self._task = Some(task);
@@ -176,7 +106,6 @@ impl TerminalEngine {
     pub fn kill_shell(&mut self) {
         self.pty_writer = None;
         self.pty_master = None;
-        self.receiver = None;
         self._task = None;
     }
 
@@ -188,17 +117,3 @@ impl TerminalEngine {
     }
 }
 
-fn determine_color(line: &str) -> TextColor {
-    let lower = line.to_lowercase();
-    if lower.contains("error") {
-        TextColor::Red
-    } else if lower.contains("warning") {
-        TextColor::Yellow
-    } else if lower.contains("done") || lower.contains("✓") {
-        TextColor::Cyan
-    } else if line.trim_start().starts_with('>') || line.trim_start().starts_with('$') {
-        TextColor::Green
-    } else {
-        TextColor::White
-    }
-}

@@ -135,18 +135,18 @@ impl Perform for TerminalGrid {
                 match mode {
                     0 => { // Below
                         for i in self.cursor_x..self.cols {
-                            self.cells[self.cursor_y][i].char = ' ';
+                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                         }
                         for r in (self.cursor_y + 1)..self.rows {
                             for c in 0..self.cols {
-                                self.cells[r][c].char = ' ';
+                                self.cells[r][c] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                             }
                         }
                     }
                     2 => { // All
                         for r in 0..self.rows {
                             for c in 0..self.cols {
-                                self.cells[r][c].char = ' ';
+                                self.cells[r][c] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                             }
                         }
                         self.cursor_x = 0;
@@ -160,17 +160,17 @@ impl Perform for TerminalGrid {
                 match mode {
                     0 => { // Right
                         for i in self.cursor_x..self.cols {
-                            self.cells[self.cursor_y][i].char = ' ';
+                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                         }
                     }
                     1 => { // Left
                         for i in 0..=self.cursor_x {
-                            self.cells[self.cursor_y][i].char = ' ';
+                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                         }
                     }
                     2 => { // All
                         for i in 0..self.cols {
-                            self.cells[self.cursor_y][i].char = ' ';
+                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
                         }
                     }
                     _ => {}
