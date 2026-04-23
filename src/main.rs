@@ -8,6 +8,8 @@ use cosmic::{
     iced::{
         Length, Subscription,
         mouse,
+        keyboard,
+        Event,
         widget::{
             canvas::{self, Cache, Canvas, Frame, Geometry, Path, Stroke},
             mouse_area,
@@ -34,7 +36,7 @@ fn cubic_bezier(t: f32) -> f32 {
 pub enum Message {
     Tick(Instant),
     ToggleTerminal,
-    TerminalOutput(String, TextColor),
+    KeyPressed(keyboard::Key, keyboard::Modifiers, Option<String>),
     TerminalClosed,
 }
 
@@ -54,6 +56,7 @@ pub struct App {
     // --- Terminal State ---
     terminal_engine: terminal::TerminalEngine,
     terminal_lines: VecDeque<(String, Color)>,
+    is_new_line: bool,
 
     // --- Animation State ---
     phase: AnimationPhase,
@@ -257,6 +260,7 @@ impl Application for App {
             crossfade: CrossfadeManager::new(1280, 720),
             terminal_engine,
             terminal_lines: VecDeque::new(),
+            is_new_line: true,
             last_update: Instant::now(),
             start_time: Instant::now(),
             cache: Cache::new(),
@@ -288,7 +292,7 @@ impl Application for App {
                 if let Some(rx) = &self.terminal_engine.receiver {
                     while let Ok(msg) = rx.try_recv() {
                         match msg {
-                            terminal::PtyMessage::Output(text, color) => {
+                            terminal::PtyMessage::UpdateLine(text, color) => {
                                 let iced_color = match color {
                                     TextColor::Red => Color::from_rgb(1.0, 0.3, 0.3),
                                     TextColor::Yellow => Color::from_rgb(1.0, 1.0, 0.3),
@@ -296,10 +300,22 @@ impl Application for App {
                                     TextColor::Green => Color::from_rgb(0.3, 1.0, 0.3),
                                     TextColor::White => Color::from_rgb(0.9, 0.9, 0.9),
                                 };
-                                self.terminal_lines.push_front((text, iced_color));
+                                
+                                if self.is_new_line || self.terminal_lines.is_empty() {
+                                    self.terminal_lines.push_front((text, iced_color));
+                                    self.is_new_line = false;
+                                } else {
+                                    if let Some(front) = self.terminal_lines.front_mut() {
+                                        *front = (text, iced_color);
+                                    }
+                                }
+                                
                                 if self.terminal_lines.len() > 30 {
                                     self.terminal_lines.pop_back();
                                 }
+                            }
+                            terminal::PtyMessage::FinishLine => {
+                                self.is_new_line = true;
                             }
                             terminal::PtyMessage::Closed => {
                                 // Eventuell später neu starten oder UI updaten
@@ -323,15 +339,57 @@ impl Application for App {
                 }
                 self.cache.clear();
             }
-            Message::TerminalOutput(_, _) | Message::TerminalClosed => {
-                // Diese Messages sind definiert für zukünftige Architektur,
-                // werden aber aktuell synchron im Tick verarbeitet für bessere Performance.
+            Message::KeyPressed(key, modifiers, text) => {
+                if self.phase == AnimationPhase::Expanded {
+                    let mut seq = String::new();
+                    
+                    if modifiers.control() {
+                        match key {
+                            keyboard::Key::Character(c) => {
+                                if let Some(ch) = c.chars().next() {
+                                    let ch_lower = ch.to_ascii_lowercase();
+                                    if ch_lower == 'c' {
+                                        seq.push('\x03'); // Ctrl+C
+                                    } else if ch_lower == 'd' {
+                                        seq.push('\x04'); // Ctrl+D
+                                    } else if ch_lower == 'l' {
+                                        seq.push('\x0c'); // Ctrl+L
+                                    } else if ch_lower >= 'a' && ch_lower <= 'z' {
+                                        let ctrl_code = (ch_lower as u8) - b'a' + 1;
+                                        seq.push(ctrl_code as char);
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        match key {
+                            keyboard::Key::Named(keyboard::key::Named::Enter) => seq.push('\r'),
+                            keyboard::Key::Named(keyboard::key::Named::Backspace) => seq.push('\x7f'),
+                            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => seq.push_str("\x1b[A"),
+                            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => seq.push_str("\x1b[B"),
+                            keyboard::Key::Named(keyboard::key::Named::ArrowRight) => seq.push_str("\x1b[C"),
+                            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => seq.push_str("\x1b[D"),
+                            keyboard::Key::Named(keyboard::key::Named::Tab) => seq.push('\t'),
+                            _ => {
+                                if let Some(t) = text {
+                                    seq.push_str(&t);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if !seq.is_empty() {
+                        self.terminal_engine.send_key(&seq);
+                    }
+                }
             }
+            Message::TerminalClosed => {}
         }
         Task::none()
     }
 
-    fn view(&self) -> Element<Message> {
+    fn view(&self) -> Element<'_, Message> {
         let canvas = Canvas::new(self)
             .width(Length::Fill)
             .height(Length::Fill);
@@ -346,7 +404,18 @@ impl Application for App {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        cosmic::iced::time::every(Duration::from_millis(16)).map(Message::Tick)
+        let tick = cosmic::iced::time::every(Duration::from_millis(16)).map(Message::Tick);
+        
+        let keyboard_events = cosmic::iced::event::listen_with(|event, status, _window_id| {
+            if status == cosmic::iced::event::Status::Ignored {
+                if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) = event {
+                    return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
+                }
+            }
+            None
+        });
+
+        Subscription::batch(vec![tick, keyboard_events])
     }
 }
 

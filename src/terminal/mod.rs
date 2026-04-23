@@ -1,5 +1,5 @@
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
-use std::io::Read;
+use std::io::{Read, Write};
 use std::sync::mpsc::{self, Receiver};
 use tokio::task::JoinHandle;
 
@@ -14,7 +14,8 @@ pub enum TextColor {
 
 #[derive(Debug, Clone)]
 pub enum PtyMessage {
-    Output(String, TextColor),
+    UpdateLine(String, TextColor),
+    FinishLine,
     Closed,
 }
 
@@ -22,6 +23,7 @@ pub struct TerminalEngine {
     pub cols: u16,
     pub rows: u16,
     pty_master: Option<Box<dyn MasterPty + Send>>,
+    pty_writer: Option<Box<dyn Write + Send>>,
     pub receiver: Option<Receiver<PtyMessage>>,
     _task: Option<JoinHandle<()>>,
 }
@@ -32,6 +34,7 @@ impl TerminalEngine {
             cols,
             rows,
             pty_master: None,
+            pty_writer: None,
             receiver: None,
             _task: None,
         }
@@ -80,7 +83,14 @@ impl TerminalEngine {
             Err(_) => return,
         };
 
-        self.pty_master = Some(pair.master);
+        let master = pair.master;
+
+        self.pty_writer = match master.take_writer() {
+            Ok(w) => Some(w),
+            Err(_) => return,
+        };
+
+        self.pty_master = Some(master);
 
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
@@ -95,62 +105,62 @@ impl TerminalEngine {
                     Ok(n) => {
                         let text = String::from_utf8_lossy(&buf[..n]);
                         
-                        // Robustes Filtern von ANSI-Escape-Codes (CSI und OSC)
-                        let mut clean_text = String::new();
                         let mut chars = text.chars().peekable();
+                        let mut updated = false;
+
                         while let Some(c) = chars.next() {
                             if c == '\x1b' {
                                 if let Some(&next) = chars.peek() {
                                     if next == '[' {
                                         chars.next(); // Consume '['
-                                        // CSI: Consume bis zum Endzeichen (0x40 - 0x7E)
                                         while let Some(cc) = chars.next() {
                                             if cc >= '@' && cc <= '~' {
+                                                // \x1b[K = Clear to end of line
+                                                if cc == 'K' {
+                                                    line_buffer.clear();
+                                                    updated = true;
+                                                }
                                                 break;
                                             }
                                         }
                                     } else if next == ']' {
                                         chars.next(); // Consume ']'
-                                        // OSC (z.B. Window Title): Consume bis BEL (\x07) oder ST (\x1b\\)
                                         while let Some(cc) = chars.next() {
-                                            if cc == '\x07' {
-                                                break;
-                                            } else if cc == '\x1b' {
+                                            if cc == '\x07' { break; }
+                                            if cc == '\x1b' {
                                                 if let Some(&next_st) = chars.peek() {
-                                                    if next_st == '\\' {
-                                                        chars.next();
-                                                    }
+                                                    if next_st == '\\' { chars.next(); }
                                                 }
                                                 break;
                                             }
                                         }
                                     } else {
-                                        chars.next(); // Unbekannte kurze Escape-Sequenz überspringen
+                                        chars.next(); 
                                     }
                                 }
-                            } else if c != '\r' && c != '\x07' && c != '\x08' {
-                                clean_text.push(c);
+                            } else if c == '\n' {
+                                let _ = tx.send(PtyMessage::FinishLine);
+                                line_buffer.clear();
+                                updated = false;
+                            } else if c == '\r' {
+                                if let Some(&'\n') = chars.peek() {
+                                    // ignore, \n handles it
+                                } else {
+                                    line_buffer.clear();
+                                    updated = true;
+                                }
+                            } else if c == '\x08' || c == '\x7f' {
+                                line_buffer.pop();
+                                updated = true;
+                            } else if c != '\x07' {
+                                line_buffer.push(c);
+                                updated = true;
                             }
                         }
 
-                        // Split by newline and send
-                        for c in clean_text.chars() {
-                            if c == '\n' {
-                                let line = line_buffer.clone();
-                                line_buffer.clear();
-                                let color = determine_color(&line);
-                                let _ = tx.send(PtyMessage::Output(line, color));
-                            } else {
-                                line_buffer.push(c);
-                            }
-                        }
-                        
-                        // Sende unvollständige Zeile (wie Prompts), falls am Ende des Buffers
-                        if !line_buffer.is_empty() {
+                        if updated {
                             let color = determine_color(&line_buffer);
-                            // Senden ohne newline zu leeren, wir nehmen an, dass es eine Zeile ist
-                            let _ = tx.send(PtyMessage::Output(line_buffer.clone(), color));
-                            line_buffer.clear();
+                            let _ = tx.send(PtyMessage::UpdateLine(line_buffer.clone(), color));
                         }
                     }
                     Err(_) => break,
@@ -164,10 +174,17 @@ impl TerminalEngine {
     }
 
     pub fn kill_shell(&mut self) {
-        // Dropping master PTY schließt die Verbindung, was den Reader unblockt und den Task beendet
+        self.pty_writer = None;
         self.pty_master = None;
         self.receiver = None;
         self._task = None;
+    }
+
+    pub fn send_key(&mut self, key_str: &str) {
+        if let Some(writer) = &mut self.pty_writer {
+            let _ = writer.write_all(key_str.as_bytes());
+            let _ = writer.flush();
+        }
     }
 }
 
