@@ -51,6 +51,7 @@ pub struct App {
     phase: AnimationPhase,
     progress: f32, // 0.0 to 1.0
     last_update: Instant,
+    start_time: Instant,
     
     // Config
     corner_rect: Rectangle,
@@ -69,14 +70,14 @@ impl canvas::Program<Message, Theme> for App {
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let geometry = self.cache.draw(renderer, bounds.size(), |frame: &mut Frame| {
-            // 1. Hintergrund-Effekt (Crossfade Manager)
-            // Hier wird das Hintergrund-Rendering aus dem CrossfadeManager übernommen
-            // (In einer echten App würde man hier ein Pixmap-Canvas zeichnen)
-            frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgb(0.02, 0.02, 0.05));
-
-            // 2. Terminal Fenster Berechnung
-            let (target_rect, rotate_y) = self.calculate_3d_geometry();
+            // 2. Terminal Fenster & Alpha Berechnung
+            let (target_rect, rotate_y, alpha) = self.calculate_3d_geometry();
             
+            // 1. Hintergrund-Effekt (Crossfade Manager)
+            if alpha > 0.0 {
+                frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgba(0.02, 0.02, 0.05, alpha));
+            }
+
             // 3. 3D-Trapez zeichnen
             self.draw_3d_window(frame, target_rect, rotate_y);
         });
@@ -85,33 +86,34 @@ impl canvas::Program<Message, Theme> for App {
 }
 
 impl App {
-    fn calculate_3d_geometry(&self) -> (Rectangle, f32) {
+    fn calculate_3d_geometry(&self) -> (Rectangle, f32, f32) {
         let switch_t = 0.416; // 250ms / 600ms mark
         
         match self.phase {
             AnimationPhase::Collapsed => {
                 // Sanftes Schweben (Breathe)
-                let time = self.last_update.elapsed().as_secs_f32();
+                let time = self.start_time.elapsed().as_secs_f32();
                 let hover = (time * 2.0).sin() * 5.0;
                 let mut rect = self.corner_rect;
                 rect.y += hover;
-                (rect, -18.0) // Default Tilt
+                (rect, -18.0, 0.0) // Komplett transparent in der Ecke
             }
-            AnimationPhase::Expanded => (self.center_rect, 0.0),
+            AnimationPhase::Expanded => (self.center_rect, 0.0, 1.0),
             AnimationPhase::Expanding | AnimationPhase::Collapsing => {
                 let t = if self.phase == AnimationPhase::Expanding { self.progress } else { 1.0 - self.progress };
                 let eased_t = cubic_bezier(t);
+                let alpha = eased_t; // Interpoliert von 0.0 zu 1.0
                 
                 if eased_t < switch_t {
                     // Phase 1: Flip Out (Corner)
                     let p = eased_t / switch_t;
                     let angle = p * 90.0;
-                    (self.corner_rect, angle)
+                    (self.corner_rect, angle, alpha)
                 } else {
                     // Phase 2: Flip In (Center)
                     let p = (eased_t - switch_t) / (1.0 - switch_t);
                     let angle = 90.0 * (1.0 - p);
-                    (self.center_rect, angle)
+                    (self.center_rect, angle, alpha)
                 }
             }
         }
@@ -143,9 +145,18 @@ impl App {
         });
 
         // Fenster-Body (Holographisches Blau)
-        frame.fill(&path, Color::from_rgba(0.05, 0.1, 0.2, 0.75));
+        frame.fill(&path, Color::from_rgba(0.05, 0.1, 0.2, 0.8));
         
-        // Fenster-Rahmen (Neon-Cyan)
+        // Glow-Effekt (Holographischer Rand / Box-Shadow Simulation)
+        for i in 1..=4 {
+            let glow_width = i as f32 * 5.0;
+            let glow_alpha = 0.25 / i as f32;
+            frame.stroke(&path, Stroke::default()
+                .with_color(Color::from_rgba(0.4, 1.0, 0.8, glow_alpha))
+                .with_width(glow_width));
+        }
+
+        // Innerer scharfer Rand
         frame.stroke(&path, Stroke::default()
             .with_color(Color::from_rgb(0.4, 1.0, 0.8))
             .with_width(1.5));
@@ -185,9 +196,10 @@ impl Application for App {
             core,
             crossfade: CrossfadeManager::new(1280, 720),
             last_update: Instant::now(),
+            start_time: Instant::now(),
             cache: Cache::new(),
-            phase: AnimationPhase::Collapsed,
-            progress: 0.0,
+            phase: AnimationPhase::Expanded,
+            progress: 1.0,
             // Standard Positionen
             corner_rect: Rectangle::new(Point::new(1280.0 - 680.0, 720.0 - 460.0), Size::new(640.0, 420.0)),
             center_rect: Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82)),
@@ -207,8 +219,8 @@ impl Application for App {
                         self.progress = 0.0;
                         self.phase = if self.phase == AnimationPhase::Expanding { AnimationPhase::Expanded } else { AnimationPhase::Collapsed };
                     }
-                    self.cache.clear();
                 }
+                self.cache.clear(); // IMMER den Cache leeren, damit Hover & Pulse funktionieren
             }
             Message::ToggleTerminal => {
                 if self.phase == AnimationPhase::Collapsed {
