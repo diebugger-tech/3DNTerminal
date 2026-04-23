@@ -2,7 +2,6 @@ mod effects;
 mod terminal;
 
 use std::time::{Instant, Duration};
-use std::collections::VecDeque;
 use cosmic::{
     app::{Core, Settings, Task},
     iced::{
@@ -12,7 +11,6 @@ use cosmic::{
         Event,
         widget::{
             canvas::{self, Cache, Canvas, Frame, Geometry, Path, Stroke},
-            mouse_area,
             stack, image,
         },
         Rectangle, Point, Size, Color, Pixels,
@@ -37,6 +35,10 @@ pub enum Message {
     Tick(Instant),
     ToggleTerminal,
     KeyPressed(keyboard::Key, keyboard::Modifiers, Option<String>),
+    Scroll(f32),
+    WindowResized(f32, f32),
+    CursorMoved(Point),
+    MouseClicked(Instant),
     TerminalClosed,
 }
 
@@ -95,6 +97,11 @@ pub struct App {
     progress: f32, // 0.0 to 1.0
     last_update: Instant,
     start_time: Instant,
+    
+    // --- Input State ---
+    cursor_pos: Point,
+    last_click_time: Instant,
+    cursor_visible: bool,
     
     // Config
     corner_rect: Rectangle,
@@ -162,11 +169,11 @@ impl App {
         }
     }
 
-    fn draw_3d_window(&self, frame: &mut Frame, rect: Rectangle, angle_y: f32) {
+    fn get_quad(&self) -> [Point; 4] {
+        let (rect, angle_y, _) = self.calculate_3d_geometry();
         let center = rect.center();
         let rad = angle_y.to_radians();
         let cos_a = rad.cos();
-        
         let w = rect.width * cos_a;
         let h = rect.height;
         let perspective = (rad.sin() * 40.0).abs();
@@ -175,6 +182,20 @@ impl App {
         let p2 = Point::new(center.x + w/2.0, center.y - h/2.0 - perspective);
         let p3 = Point::new(center.x + w/2.0, center.y + h/2.0 + perspective);
         let p4 = Point::new(center.x - w/2.0, center.y + h/2.0 - perspective);
+        [p1, p2, p3, p4]
+    }
+
+    fn draw_3d_window(&self, frame: &mut Frame, rect: Rectangle, angle_y: f32) {
+        let quad = self.get_quad();
+        let p1 = quad[0];
+        let p2 = quad[1];
+        let p3 = quad[2];
+        let p4 = quad[3];
+        
+        let rad = angle_y.to_radians();
+        let cos_a = rad.cos();
+        let w = rect.width * cos_a;
+        let h = rect.height;
 
         let path = Path::new(|b| {
             b.move_to(p1);
@@ -257,11 +278,13 @@ impl App {
                         break; // Text-Clipping unten
                     }
                     
-                    for x in 0..grid.cols {
-                        let cell = grid.cells[y][x];
-                        if cell.char == ' ' && cell.bg == Color::TRANSPARENT {
-                            continue;
-                        }
+                    if let Some(row) = grid.get_visible_row(y) {
+                        for x in 0..grid.cols {
+                            if x >= row.len() { break; }
+                            let cell = row[x];
+                            if cell.char == ' ' && cell.bg == Color::TRANSPARENT {
+                                continue;
+                            }
                         
                         // Approx character width
                         let char_width = font_size * 0.6;
@@ -291,9 +314,47 @@ impl App {
                         }
                     }
                 }
+                }
+                
+                // Draw Cursor
+                if self.cursor_visible && border_alpha > 0.0 {
+                    let total_lines = grid.scrollback.len() + grid.rows;
+                    let start_index = total_lines.saturating_sub(grid.rows + grid.viewport_offset);
+                    let abs_cursor_y = grid.scrollback.len() + grid.cursor_y;
+                    
+                    if abs_cursor_y >= start_index && abs_cursor_y < start_index + grid.rows {
+                        let screen_y = abs_cursor_y - start_index;
+                        let current_y = start_y + (screen_y as f32 * line_height);
+                        
+                        if current_y <= p4.y - margin_y {
+                            let char_width = font_size * 0.6;
+                            let cursor_pos = Point::new(
+                                p1.x + margin_x + (grid.cursor_x as f32 * char_width),
+                                current_y
+                            );
+                            
+                            frame.fill_rectangle(
+                                Point::new(cursor_pos.x, cursor_pos.y - font_size),
+                                Size::new(char_width, line_height),
+                                Color::from_rgba(0.4, 1.0, 0.8, text_alpha * 0.8)
+                            );
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+fn is_point_in_quad(p: Point, quad: &[Point; 4]) -> bool {
+    let cross = |a: Point, b: Point, c: Point| -> f32 {
+        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    };
+    let c1 = cross(quad[0], quad[1], p) >= 0.0;
+    let c2 = cross(quad[1], quad[2], p) >= 0.0;
+    let c3 = cross(quad[2], quad[3], p) >= 0.0;
+    let c4 = cross(quad[3], quad[0], p) >= 0.0;
+    (c1 && c2 && c3 && c4) || (!c1 && !c2 && !c3 && !c4)
 }
 
 impl Application for App {
@@ -315,6 +376,9 @@ impl Application for App {
             terminal_engine,
             last_update: Instant::now(),
             start_time: Instant::now(),
+            cursor_pos: Point::ORIGIN,
+            last_click_time: Instant::now() - Duration::from_secs(10),
+            cursor_visible: true,
             cache: Cache::new(),
             bg_handle: None,
             phase: AnimationPhase::Expanded,
@@ -333,16 +397,21 @@ impl Application for App {
                 let dt = now.duration_since(self.last_update).as_secs_f32();
                 self.last_update = now;
 
+                let mut needs_redraw = false;
+
                 if self.phase == AnimationPhase::Expanding || self.phase == AnimationPhase::Collapsing {
                     self.progress += dt / 0.6; // Gesamtdauer 600ms
                     if self.progress >= 1.0 {
                         self.progress = 0.0;
                         self.phase = if self.phase == AnimationPhase::Expanding { AnimationPhase::Expanded } else { AnimationPhase::Collapsed };
                     }
+                    needs_redraw = true; // Immer redraw während Animation
+                } else if self.phase == AnimationPhase::Collapsed {
+                    // Hover effekt wenn collapsed: Breathe Animation (benötigt ständigen Redraw)
+                    needs_redraw = true;
                 }
                 
                 // --- UPDATE BACKGROUND EFFECTS ---
-                // Der Background-Thread schickt uns fertige Frames. Wir nehmen immer das aktuellste.
                 while let Ok(frame_data) = self.effect_engine.receiver.try_recv() {
                     self.bg_handle = Some(image::Handle::from_rgba(
                         1280,
@@ -351,10 +420,23 @@ impl Application for App {
                     ));
                 }
 
-                // PTY-State wird direkt aus dem Shared Grid in draw() gelesen
+                // Grid Dirty Check & Cursor Blink
+                if let Ok(mut grid) = self.terminal_engine.grid.lock() {
+                    if grid.dirty {
+                        needs_redraw = true;
+                        grid.dirty = false;
+                    }
+                }
 
+                let current_cursor_visible = (now.duration_since(self.start_time).as_millis() / 500) % 2 == 0;
+                if self.cursor_visible != current_cursor_visible {
+                    self.cursor_visible = current_cursor_visible;
+                    needs_redraw = true;
+                }
 
-                self.cache.clear(); // IMMER den Cache leeren, damit Hover & Pulse funktionieren
+                if needs_redraw {
+                    self.cache.clear();
+                }
             }
             Message::ToggleTerminal => {
                 if self.phase == AnimationPhase::Collapsed {
@@ -372,6 +454,10 @@ impl Application for App {
             Message::KeyPressed(key, modifiers, text) => {
                 if self.phase == AnimationPhase::Expanded {
                     let mut seq = String::new();
+                    
+                    if let Ok(mut grid) = self.terminal_engine.grid.lock() {
+                        grid.viewport_offset = 0; // Reset scroll on keypress
+                    }
                     
                     if modifiers.control() {
                         match key {
@@ -414,6 +500,74 @@ impl Application for App {
                     }
                 }
             }
+            Message::Scroll(delta) => {
+                if self.phase == AnimationPhase::Expanded {
+                    if let Ok(mut grid) = self.terminal_engine.grid.lock() {
+                        if delta > 0.0 {
+                            grid.scroll_up(3); // Scroll 3 lines per tick
+                        } else if delta < 0.0 {
+                            grid.scroll_down(3);
+                        }
+                    }
+                }
+            }
+            Message::WindowResized(width, height) => {
+                // Update rects
+                self.corner_rect = Rectangle::new(Point::new(width - 450.0, height - 300.0), Size::new(400.0, 250.0));
+                self.center_rect = Rectangle::new(Point::new(width * 0.06, height * 0.09), Size::new(width * 0.88, height * 0.82));
+                
+                // Calculate new grid size based on expanded mode (center_rect)
+                let base_font_size = (self.center_rect.height / 30.0).clamp(10.0, 18.0);
+                let char_width = base_font_size * 0.6;
+                let line_height = base_font_size * 1.5;
+                
+                let margin_x = (self.center_rect.width * 0.05).clamp(5.0, 20.0);
+                let margin_y = (self.center_rect.height * 0.05).clamp(10.0, 30.0);
+                
+                let usable_width = self.center_rect.width - (margin_x * 2.0);
+                let usable_height = self.center_rect.height - (margin_y * 2.0) - (base_font_size * 3.0); // minus header
+                
+                let cols = (usable_width / char_width).max(20.0) as u16;
+                let rows = (usable_height / line_height).max(10.0) as u16;
+                
+                self.terminal_engine.resize(cols, rows);
+                if let Ok(mut grid) = self.terminal_engine.grid.lock() {
+                    grid.resize(cols as usize, rows as usize);
+                }
+                
+                self.cache.clear();
+            }
+            Message::CursorMoved(pos) => {
+                self.cursor_pos = pos;
+            }
+            Message::MouseClicked(now) => {
+                let is_double_click = now.duration_since(self.last_click_time) < Duration::from_millis(300);
+                self.last_click_time = now;
+                
+                let quad = self.get_quad();
+                if is_point_in_quad(self.cursor_pos, &quad) {
+                    if self.phase == AnimationPhase::Collapsed {
+                        self.phase = AnimationPhase::Expanding;
+                        self.progress = 0.0;
+                        self.cache.clear();
+                    } else if self.phase == AnimationPhase::Expanded {
+                        if is_double_click {
+                            self.phase = AnimationPhase::Collapsing;
+                            self.progress = 0.0;
+                            self.cache.clear();
+                        } else {
+                            let min_y = quad[0].y.min(quad[1].y);
+                            let max_y = quad[3].y.max(quad[2].y);
+                            let height = max_y - min_y;
+                            if self.cursor_pos.y < min_y + height * 0.15 { // Top 15% header click
+                                self.phase = AnimationPhase::Collapsing;
+                                self.progress = 0.0;
+                                self.cache.clear();
+                            }
+                        }
+                    }
+                }
+            }
             Message::TerminalClosed => {}
         }
         Task::none()
@@ -438,28 +592,46 @@ impl Application for App {
         // Canvas (Hologramm) drüberlegen
         layers.push(canvas.into());
 
-        mouse_area(
-            container(stack(layers))
-                .width(Length::Fill)
-                .height(Length::Fill)
-        )
-        .on_press(Message::ToggleTerminal)
-        .into()
+        container(stack(layers))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
         let tick = cosmic::iced::time::every(Duration::from_millis(16)).map(Message::Tick);
         
-        let keyboard_events = cosmic::iced::event::listen_with(|event, status, _window_id| {
+        let events = cosmic::iced::event::listen_with(|event, status, _window_id| {
             if status == cosmic::iced::event::Status::Ignored {
-                if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) = event {
-                    return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
+                match event {
+                    Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) => {
+                        if key == keyboard::Key::Named(keyboard::key::Named::F12) {
+                            return Some(Message::ToggleTerminal);
+                        }
+                        return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
+                    }
+                    Event::Mouse(mouse::Event::CursorMoved { position }) => {
+                        return Some(Message::CursorMoved(position));
+                    }
+                    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                        return Some(Message::MouseClicked(Instant::now()));
+                    }
+                    Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                        match delta {
+                            mouse::ScrollDelta::Lines { y, .. } => return Some(Message::Scroll(y)),
+                            mouse::ScrollDelta::Pixels { y, .. } => return Some(Message::Scroll(y.signum())),
+                        }
+                    }
+                    Event::Window(cosmic::iced::window::Event::Resized(size)) => {
+                        return Some(Message::WindowResized(size.width, size.height));
+                    }
+                    _ => {}
                 }
             }
             None
         });
 
-        Subscription::batch(vec![tick, keyboard_events])
+        Subscription::batch(vec![tick, events])
     }
 }
 

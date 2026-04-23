@@ -103,6 +103,7 @@ impl TerminalEngine {
         self._task = Some(task);
     }
 
+    #[allow(dead_code)]
     pub fn kill_shell(&mut self) {
         self.pty_writer = None;
         self.pty_master = None;

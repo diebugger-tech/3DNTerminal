@@ -1,6 +1,36 @@
 use vte::{Params, Perform};
 use cosmic::iced::Color;
 
+fn color_from_256(id: u8) -> Color {
+    match id {
+        0..=7 => {
+            let r = if id & 1 != 0 { 0.8 } else { 0.0 };
+            let g = if id & 2 != 0 { 0.8 } else { 0.0 };
+            let b = if id & 4 != 0 { 0.8 } else { 0.0 };
+            Color::from_rgb(r, g, b)
+        }
+        8..=15 => {
+            let r = if id & 1 != 0 { 1.0 } else { 0.3 };
+            let g = if id & 2 != 0 { 1.0 } else { 0.3 };
+            let b = if id & 4 != 0 { 1.0 } else { 0.3 };
+            Color::from_rgb(r, g, b)
+        }
+        16..=231 => {
+            let mut val = id - 16;
+            let b = val % 6; val /= 6;
+            let g = val % 6; val /= 6;
+            let r = val % 6;
+            let step = |c| if c == 0 { 0.0 } else { (c as f32 * 40.0 + 55.0) / 255.0 };
+            Color::from_rgb(step(r), step(g), step(b))
+        }
+        232..=255 => {
+            let gray = ((id - 232) as f32 * 10.0 + 8.0) / 255.0;
+            Color::from_rgb(gray, gray, gray)
+        }
+    }
+}
+
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
     pub char: char,
@@ -31,8 +61,12 @@ pub struct TerminalGrid {
     pub cursor_y: usize,
     pub default_fg: Color,
     pub default_bg: Color,
-    current_fg: Color,
-    current_bg: Color,
+    pub current_fg: Color,
+    pub current_bg: Color,
+    pub scrollback: Vec<Vec<Cell>>,
+    pub max_scrollback: usize,
+    pub viewport_offset: usize,
+    pub dirty: bool,
 }
 
 impl TerminalGrid {
@@ -50,15 +84,77 @@ impl TerminalGrid {
             default_bg,
             current_fg: default_fg,
             current_bg: default_bg,
+            scrollback: Vec::new(),
+            max_scrollback: 1000,
+            viewport_offset: 0,
+            dirty: true,
         }
+    }
+
+    pub fn resize(&mut self, new_cols: usize, new_rows: usize) {
+        if new_cols == self.cols && new_rows == self.rows {
+            return;
+        }
+        
+        let empty_cell = Cell { char: ' ', fg: self.default_fg, bg: self.default_bg, bold: false, italic: false };
+        
+        if new_rows > self.rows {
+            for _ in self.rows..new_rows {
+                self.cells.push(vec![empty_cell; new_cols]);
+            }
+        } else if new_rows < self.rows {
+            self.cells.truncate(new_rows);
+            if self.cursor_y >= new_rows {
+                self.cursor_y = new_rows.saturating_sub(1);
+            }
+        }
+        
+        for row in self.cells.iter_mut() {
+            row.resize(new_cols, empty_cell);
+        }
+        
+        self.cols = new_cols;
+        self.rows = new_rows;
+        if self.cursor_x >= new_cols {
+            self.cursor_x = new_cols.saturating_sub(1);
+        }
+        self.dirty = true;
+    }
+
+    pub fn get_visible_row(&self, y: usize) -> Option<&Vec<Cell>> {
+        let total_lines = self.scrollback.len() + self.rows;
+        let start_index = total_lines.saturating_sub(self.rows + self.viewport_offset);
+        let abs_y = start_index + y;
+
+        if abs_y < self.scrollback.len() {
+            self.scrollback.get(abs_y)
+        } else {
+            self.cells.get(abs_y.saturating_sub(self.scrollback.len()))
+        }
+    }
+
+    pub fn scroll_up(&mut self, lines: usize) {
+        let old_offset = self.viewport_offset;
+        self.viewport_offset = (self.viewport_offset + lines).min(self.scrollback.len());
+        if old_offset != self.viewport_offset { self.dirty = true; }
+    }
+
+    pub fn scroll_down(&mut self, lines: usize) {
+        let old_offset = self.viewport_offset;
+        self.viewport_offset = self.viewport_offset.saturating_sub(lines);
+        if old_offset != self.viewport_offset { self.dirty = true; }
     }
 
     fn new_line(&mut self) {
         if self.cursor_y < self.rows - 1 {
             self.cursor_y += 1;
         } else {
-            // Scroll down: remove first line, add new line at end
-            self.cells.remove(0);
+            // Scroll down: push first line to scrollback, add new line at end
+            let old_line = self.cells.remove(0);
+            self.scrollback.push(old_line);
+            if self.scrollback.len() > self.max_scrollback {
+                self.scrollback.remove(0);
+            }
             self.cells.push(vec![Cell {
                 char: ' ',
                 fg: self.default_fg,
@@ -67,6 +163,7 @@ impl TerminalGrid {
                 italic: false,
             }; self.cols]);
         }
+        self.dirty = true;
     }
 }
 
@@ -85,15 +182,17 @@ impl Perform for TerminalGrid {
             italic: false,
         };
         self.cursor_x += 1;
+        self.dirty = true;
     }
 
     fn execute(&mut self, byte: u8) {
         match byte {
-            b'\n' | b'\x0B' | b'\x0C' => self.new_line(),
-            b'\r' => self.cursor_x = 0,
+            b'\n' | b'\x0B' | b'\x0C' => { self.new_line(); self.dirty = true; }
+            b'\r' => { self.cursor_x = 0; self.dirty = true; }
             b'\x08' => { // Backspace
                 if self.cursor_x > 0 {
                     self.cursor_x -= 1;
+                    self.dirty = true;
                 }
             }
             _ => {}
@@ -106,6 +205,7 @@ impl Perform for TerminalGrid {
     fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
 
     fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], _ignore: bool, action: char) {
+        self.dirty = true; // Any CSI implies dirty
         match action {
             'A' => { // Cursor Up
                 let n = params.iter().next().map_or(1, |x| x[0] as usize).max(1);
@@ -182,11 +282,39 @@ impl Perform for TerminalGrid {
                     self.current_bg = self.default_bg;
                     return;
                 }
-                for param in params.iter() {
-                    match param[0] {
+                
+                let mut it = params.iter().flat_map(|p| p.iter().copied());
+                while let Some(param) = it.next() {
+                    match param {
                         0 => {
                             self.current_fg = self.default_fg;
                             self.current_bg = self.default_bg;
+                        }
+                        38 => {
+                            if let Some(format) = it.next() {
+                                if format == 2 {
+                                    let r = it.next().unwrap_or(0);
+                                    let g = it.next().unwrap_or(0);
+                                    let b = it.next().unwrap_or(0);
+                                    self.current_fg = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                                } else if format == 5 {
+                                    let id = it.next().unwrap_or(0);
+                                    self.current_fg = color_from_256(id as u8);
+                                }
+                            }
+                        }
+                        48 => {
+                            if let Some(format) = it.next() {
+                                if format == 2 {
+                                    let r = it.next().unwrap_or(0);
+                                    let g = it.next().unwrap_or(0);
+                                    let b = it.next().unwrap_or(0);
+                                    self.current_bg = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                                } else if format == 5 {
+                                    let id = it.next().unwrap_or(0);
+                                    self.current_bg = color_from_256(id as u8);
+                                }
+                            }
                         }
                         31 => self.current_fg = Color::from_rgb(1.0, 0.3, 0.3),
                         32 => self.current_fg = Color::from_rgb(0.3, 1.0, 0.3),
@@ -194,10 +322,21 @@ impl Perform for TerminalGrid {
                         34 => self.current_fg = Color::from_rgb(0.3, 0.3, 1.0),
                         36 => self.current_fg = Color::from_rgb(0.3, 1.0, 1.0),
                         37 => self.current_fg = self.default_fg,
+                        39 => self.current_fg = self.default_fg,
+                        
+                        41 => self.current_bg = Color::from_rgb(1.0, 0.3, 0.3),
+                        42 => self.current_bg = Color::from_rgb(0.3, 1.0, 0.3),
+                        43 => self.current_bg = Color::from_rgb(1.0, 1.0, 0.3),
+                        44 => self.current_bg = Color::from_rgb(0.3, 0.3, 1.0),
+                        46 => self.current_bg = Color::from_rgb(0.3, 1.0, 1.0),
+                        47 => self.current_bg = self.default_fg,
+                        49 => self.current_bg = self.default_bg,
+                        
                         90 => self.current_fg = Color::from_rgb(0.5, 0.5, 0.5), // Gray
                         _ => {}
                     }
                 }
+                self.dirty = true;
             }
             _ => {}
         }
