@@ -30,6 +30,8 @@ fn color_from_256(id: u8) -> Color {
     }
 }
 
+/// Represents a single character cell in the terminal grid.
+/// Contains the character data along with its foreground, background colors, and formatting.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
@@ -53,6 +55,8 @@ impl Default for Cell {
 }
 
 #[derive(Clone, Debug)]
+/// The thread-safe terminal state holding the 2D grid of `Cell`s.
+/// It also manages cursor position, active colors, viewport offset, and scrollback history.
 pub struct TerminalGrid {
     pub cells: Vec<Vec<Cell>>,
     pub cols: usize,
@@ -70,6 +74,7 @@ pub struct TerminalGrid {
 }
 
 impl TerminalGrid {
+    /// Creates a new, empty `TerminalGrid` with the specified dimensions.
     pub fn new(cols: usize, rows: usize) -> Self {
         let default_fg = Color::from_rgb(0.9, 0.9, 0.9);
         let default_bg = Color::TRANSPARENT;
@@ -91,6 +96,7 @@ impl TerminalGrid {
         }
     }
 
+    /// Resizes the grid dynamically. Existing content is preserved.
     pub fn resize(&mut self, new_cols: usize, new_rows: usize) {
         if new_cols == self.cols && new_rows == self.rows {
             return;
@@ -133,12 +139,14 @@ impl TerminalGrid {
         }
     }
 
+    /// Scrolls the viewport up (back in history) by `lines`.
     pub fn scroll_up(&mut self, lines: usize) {
         let old_offset = self.viewport_offset;
         self.viewport_offset = (self.viewport_offset + lines).min(self.scrollback.len());
         if old_offset != self.viewport_offset { self.dirty = true; }
     }
 
+    /// Scrolls the viewport down (forward in time) by `lines`.
     pub fn scroll_down(&mut self, lines: usize) {
         let old_offset = self.viewport_offset;
         self.viewport_offset = self.viewport_offset.saturating_sub(lines);

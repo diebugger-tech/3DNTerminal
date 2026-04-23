@@ -6,6 +6,9 @@ use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 use grid::TerminalGrid;
 
+/// Manages the background PTY process and VTE parser execution.
+/// It spawns a pseudo-terminal, executes a shell, and continuously reads output,
+/// which is then parsed by `vte::Parser` and written to the thread-safe `TerminalGrid`.
 pub struct TerminalEngine {
     pub cols: u16,
     pub rows: u16,
@@ -16,6 +19,7 @@ pub struct TerminalEngine {
 }
 
 impl TerminalEngine {
+    /// Creates a new `TerminalEngine` instance with the specified dimensions.
     pub fn new(cols: u16, rows: u16) -> Self {
         Self {
             cols,
@@ -27,6 +31,7 @@ impl TerminalEngine {
         }
     }
 
+    /// Resizes the PTY process to the given columns and rows.
     pub fn resize(&mut self, cols: u16, rows: u16) {
         self.cols = cols;
         self.rows = rows;
@@ -41,42 +46,34 @@ impl TerminalEngine {
         // Resize grid will be done in Phase 2
     }
 
-    pub fn spawn_shell(&mut self) {
+    /// Spawns the underlying shell process (/bin/bash) and starts the reader thread.
+    pub fn spawn_shell(&mut self) -> Result<(), String> {
         if self.pty_master.is_some() {
-            return;
+            return Ok(());
         }
 
         let pty_system = native_pty_system();
-        let pair = match pty_system.openpty(PtySize {
+        let pair = pty_system.openpty(PtySize {
             rows: self.rows,
             cols: self.cols,
             pixel_width: 0,
             pixel_height: 0,
-        }) {
-            Ok(p) => p,
-            Err(_) => return,
-        };
+        }).map_err(|e| format!("Failed to open PTY: {}", e))?;
 
         let cmd = CommandBuilder::new("/bin/bash");
 
-        let mut child = match pair.slave.spawn_command(cmd) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
+        let mut child = pair.slave.spawn_command(cmd)
+            .map_err(|e| format!("Failed to spawn shell: {}", e))?;
 
         drop(pair.slave);
 
-        let mut reader = match pair.master.try_clone_reader() {
-            Ok(r) => r,
-            Err(_) => return,
-        };
+        let mut reader = pair.master.try_clone_reader()
+            .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
 
         let master = pair.master;
 
-        self.pty_writer = match master.take_writer() {
-            Ok(w) => Some(w),
-            Err(_) => return,
-        };
+        self.pty_writer = Some(master.take_writer()
+            .map_err(|e| format!("Failed to take PTY writer: {}", e))?);
 
         self.pty_master = Some(master);
 
@@ -101,8 +98,10 @@ impl TerminalEngine {
         });
 
         self._task = Some(task);
+        Ok(())
     }
 
+    /// Kills the running shell by dropping the PTY writer and master handles.
     #[allow(dead_code)]
     pub fn kill_shell(&mut self) {
         self.pty_writer = None;

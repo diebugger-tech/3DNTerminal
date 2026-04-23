@@ -1,5 +1,6 @@
 mod effects;
 mod terminal;
+mod ui;
 
 use std::time::{Instant, Duration};
 use cosmic::{
@@ -19,16 +20,6 @@ use cosmic::{
     widget::container,
 };
 use effects::crossfade::CrossfadeManager;
-
-// --- Easing Helper ---
-fn cubic_bezier(t: f32) -> f32 {
-    let p1 = 1.0; // Control Point 1 (y)
-    let p2 = 0.3; // Control Point 2 (y)
-    // (0.16, 1, 0.3, 1) Näherung
-    let t2 = t * t;
-    let t3 = t2 * t;
-    (1.0 - t3) * 0.0 + 3.0 * (1.0 - t2) * t * p1 + 3.0 * (1.0 - t) * t2 * p2 + t3 * 1.0
-}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -151,7 +142,7 @@ impl App {
             AnimationPhase::Expanded => (self.center_rect, 0.0, 1.0),
             AnimationPhase::Expanding | AnimationPhase::Collapsing => {
                 let t = if self.phase == AnimationPhase::Expanding { self.progress } else { 1.0 - self.progress };
-                let eased_t = cubic_bezier(t);
+                let eased_t = ui::math::cubic_bezier(t);
                 let alpha = 0.4 + (0.6 * eased_t); // Interpoliert von 0.4 zu 1.0
                 
                 if eased_t < switch_t {
@@ -346,17 +337,6 @@ impl App {
     }
 }
 
-fn is_point_in_quad(p: Point, quad: &[Point; 4]) -> bool {
-    let cross = |a: Point, b: Point, c: Point| -> f32 {
-        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
-    };
-    let c1 = cross(quad[0], quad[1], p) >= 0.0;
-    let c2 = cross(quad[1], quad[2], p) >= 0.0;
-    let c3 = cross(quad[2], quad[3], p) >= 0.0;
-    let c4 = cross(quad[3], quad[0], p) >= 0.0;
-    (c1 && c2 && c3 && c4) || (!c1 && !c2 && !c3 && !c4)
-}
-
 impl Application for App {
     type Executor = cosmic::executor::Default;
     type Flags    = ();
@@ -368,7 +348,9 @@ impl Application for App {
 
     fn init(core: Core, _flags: ()) -> (Self, Task<Message>) {
         let mut terminal_engine = terminal::TerminalEngine::new(80, 24);
-        terminal_engine.spawn_shell(); // Shell nur EINMAL beim Start spawnen
+        if let Err(e) = terminal_engine.spawn_shell() {
+            eprintln!("Failed to spawn shell: {}", e);
+        }
 
         let app = App {
             core,
@@ -545,7 +527,7 @@ impl Application for App {
                 self.last_click_time = now;
                 
                 let quad = self.get_quad();
-                if is_point_in_quad(self.cursor_pos, &quad) {
+                if ui::math::is_point_in_quad(self.cursor_pos, &quad) {
                     if self.phase == AnimationPhase::Collapsed {
                         self.phase = AnimationPhase::Expanding;
                         self.progress = 0.0;
