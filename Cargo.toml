@@ -1,0 +1,38 @@
+[package]
+name = "3d-n-terminal"
+version = "0.1.0"
+edition = "2021"
+authors = ["doko1975"]
+
+[dependencies]
+bevy = { version = "0.14", optional = true }
+nannou = { version = "0.19", optional = true }
+wgpu = { version = "0.19", optional = true }
+glam = "0.27"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[[bin]]
+name = "bevy-app"
+path = "src/bin/bevy.rs"
+required-features = ["bevy-feature"]
+
+[[bin]]
+name = "nannou-app"
+path = "src/bin/nannou.rs"
+required-features = ["nannou-feature"]
+
+[[bin]]
+name = "wgpu-app"
+path = "src/bin/wgpu.rs"
+required-features = ["wgpu-feature"]
+
+[features]
+default = ["bevy-feature"]
+bevy-feature = ["bevy"]
+nannou-feature = ["nannou"]
+wgpu-feature = ["wgpu"]
+
+[profile.release]
+opt-level = 3
+lto = true
