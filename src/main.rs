@@ -1,6 +1,8 @@
 mod effects;
 mod terminal;
 mod ui;
+mod error;
+mod config;
 
 use std::time::{Instant, Duration};
 use cosmic::{
