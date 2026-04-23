@@ -2,6 +2,7 @@ mod effects;
 mod terminal;
 
 use std::time::{Instant, Duration};
+use std::collections::VecDeque;
 use cosmic::{
     app::{Core, Settings, Task},
     iced::{
@@ -17,6 +18,7 @@ use cosmic::{
     widget::container,
 };
 use effects::crossfade::CrossfadeManager;
+use terminal::TextColor;
 
 // --- Easing Helper ---
 fn cubic_bezier(t: f32) -> f32 {
@@ -32,6 +34,8 @@ fn cubic_bezier(t: f32) -> f32 {
 pub enum Message {
     Tick(Instant),
     ToggleTerminal,
+    TerminalOutput(String, TextColor),
+    TerminalClosed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -47,6 +51,10 @@ pub struct App {
     crossfade: CrossfadeManager,
     cache: Cache,
     
+    // --- Terminal State ---
+    terminal_engine: terminal::TerminalEngine,
+    terminal_lines: VecDeque<(String, Color)>,
+
     // --- Animation State ---
     phase: AnimationPhase,
     progress: f32, // 0.0 to 1.0
@@ -93,16 +101,16 @@ impl App {
             AnimationPhase::Collapsed => {
                 // Sanftes Schweben (Breathe)
                 let time = self.start_time.elapsed().as_secs_f32();
-                let hover = (time * 2.0).sin() * 5.0;
+                let hover = (time * 2.0).sin() * 8.0; // Etwas stärkeres Schweben
                 let mut rect = self.corner_rect;
                 rect.y += hover;
-                (rect, -18.0, 0.0) // Komplett transparent in der Ecke
+                (rect, -18.0, 0.4) // Basis-Alpha 0.4 (halbtransparent in der Ecke)
             }
             AnimationPhase::Expanded => (self.center_rect, 0.0, 1.0),
             AnimationPhase::Expanding | AnimationPhase::Collapsing => {
                 let t = if self.phase == AnimationPhase::Expanding { self.progress } else { 1.0 - self.progress };
                 let eased_t = cubic_bezier(t);
-                let alpha = eased_t; // Interpoliert von 0.0 zu 1.0
+                let alpha = 0.4 + (0.6 * eased_t); // Interpoliert von 0.4 zu 1.0
                 
                 if eased_t < switch_t {
                     // Phase 1: Flip Out (Corner)
@@ -124,11 +132,8 @@ impl App {
         let rad = angle_y.to_radians();
         let cos_a = rad.cos();
         
-        // Simuliere die Breite durch cos(angle)
         let w = rect.width * cos_a;
         let h = rect.height;
-        
-        // Perspektivische Verzerrung (Trapez)
         let perspective = (rad.sin() * 40.0).abs();
         
         let p1 = Point::new(center.x - w/2.0, center.y - h/2.0 + perspective);
@@ -144,40 +149,92 @@ impl App {
             b.close();
         });
 
-        // Fenster-Body (Holographisches Blau)
-        frame.fill(&path, Color::from_rgba(0.05, 0.1, 0.2, 0.8));
+        let alpha = self.calculate_3d_geometry().2;
         
-        // Glow-Effekt (Holographischer Rand / Box-Shadow Simulation)
-        for i in 1..=4 {
-            let glow_width = i as f32 * 5.0;
-            let glow_alpha = 0.25 / i as f32;
+        // Background and border alpha logic
+        let bg_alpha = 0.8 * alpha; // Geht von 0.32 bis 0.8
+        let border_alpha = alpha;   // Geht von 0.4 bis 1.0
+
+        if bg_alpha > 0.0 {
+            // Fenster-Body (Holographisches Blau)
+            frame.fill(&path, Color::from_rgba(0.05, 0.1, 0.2, bg_alpha));
+            
+            // Glow-Effekt
+            for i in 1..=6 {
+                let glow_width = i as f32 * 4.0;
+                let glow_alpha = (0.4 / i as f32) * border_alpha;
+                frame.stroke(&path, Stroke::default()
+                    .with_color(Color::from_rgba(0.4, 1.0, 0.8, glow_alpha))
+                    .with_width(glow_width));
+            }
+
+            // Innerer scharfer Rand
             frame.stroke(&path, Stroke::default()
-                .with_color(Color::from_rgba(0.4, 1.0, 0.8, glow_alpha))
-                .with_width(glow_width));
+                .with_color(Color::from_rgba(0.4, 1.0, 0.8, border_alpha))
+                .with_width(2.0)); 
         }
 
-        // Innerer scharfer Rand
-        frame.stroke(&path, Stroke::default()
-            .with_color(Color::from_rgb(0.4, 1.0, 0.8))
-            .with_width(1.5));
-            
-        // "Interface" Text Simulation
-        if cos_a > 0.1 {
-            frame.fill_text(canvas::Text {
-                content: "SYSTEM: NEURAL_LINK ACTIVE".to_string(),
-                position: Point::new(p1.x + 20.0, p1.y + 30.0),
-                color: Color::from_rgb(0.4, 1.0, 0.8),
-                size: Pixels(14.0),
-                ..canvas::Text::default()
-            });
-            
-            // Kleine Status-Box oben rechts
-            let box_w = 120.0 * cos_a;
-            frame.fill_rectangle(
-                Point::new(p2.x - box_w - 10.0, p2.y + 10.0),
-                Size::new(box_w, 20.0),
-                Color::from_rgba(0.4, 1.0, 0.8, 0.2)
-            );
+        // --- Dynamische Text-Größen & Zonen ---
+        // Basis-Schriftgröße gekoppelt an die tatsächliche Fensterhöhe
+        let base_font_size = (rect.height / 30.0).clamp(10.0, 18.0); 
+        // Beim 3D-Flip skalieren wir die Textgröße horizontal mit (erzeugt den Perspektiven-Effekt)
+        let font_size = base_font_size * cos_a.max(0.3);
+        let line_height = font_size * 1.5;
+        
+        // Ränder relativ zur projizierten Breite/Höhe
+        let margin_x = (w * 0.05).clamp(5.0, 20.0);
+        let margin_y = (h * 0.05).clamp(10.0, 30.0);
+        
+        // Damit Text beim starken Rotieren nicht aus dem schmalen Rahmen bricht,
+        // faden wir ihn aus, wenn cos_a < 0.4 wird (Clipping-Simulation)
+        let flip_alpha = (cos_a * 2.5).clamp(0.0, 1.0);
+        let text_alpha = flip_alpha; 
+
+        if text_alpha > 0.0 {
+            // --- TOP ZONE (System Header) ---
+            if border_alpha > 0.0 {
+                let top_y = p1.y + margin_y + font_size;
+                frame.fill_text(canvas::Text {
+                    content: "SYSTEM: NEURAL_LINK ACTIVE".to_string(),
+                    position: Point::new(p1.x + margin_x, top_y),
+                    color: Color::from_rgba(0.4, 1.0, 0.8, border_alpha * flip_alpha),
+                    size: Pixels(font_size),
+                    ..canvas::Text::default()
+                });
+                
+                let box_w = 120.0 * (rect.width / 1126.0) * cos_a;
+                frame.fill_rectangle(
+                    Point::new(p2.x - box_w - margin_x, p2.y + margin_y),
+                    Size::new(box_w, font_size * 1.5),
+                    Color::from_rgba(0.4, 1.0, 0.8, 0.2 * border_alpha * flip_alpha)
+                );
+            }
+
+            // --- TERMINAL OUTPUT ---
+            // Wir zeigen ausschließlich den echten Output vom PTY (keine künstlichen Elemente)
+            if !self.terminal_lines.is_empty() {
+                let start_y = p4.y - margin_y; // Beginne ganz unten
+                let mut current_y = start_y;
+                let top_limit = p1.y + margin_y + (font_size * 3.0); // Platz für Top Zone lassen
+                
+                for (text, color) in &self.terminal_lines {
+                    let mut c = *color;
+                    c.a *= text_alpha; // Fade beim Flip anwenden
+
+                    frame.fill_text(canvas::Text {
+                        content: text.clone(),
+                        position: Point::new(p1.x + margin_x, current_y),
+                        color: c,
+                        size: Pixels(font_size),
+                        ..canvas::Text::default()
+                    });
+
+                    current_y -= line_height;
+                    if current_y < top_limit {
+                        break; // Text-Clipping oben (Middle Zone endet hier)
+                    }
+                }
+            }
         }
     }
 }
@@ -192,16 +249,22 @@ impl Application for App {
     fn core_mut(&mut self) -> &mut Core { &mut self.core }
 
     fn init(core: Core, _flags: ()) -> (Self, Task<Message>) {
+        let mut terminal_engine = terminal::TerminalEngine::new(80, 24);
+        terminal_engine.spawn_shell(); // Shell nur EINMAL beim Start spawnen
+
         let app = App {
             core,
             crossfade: CrossfadeManager::new(1280, 720),
+            terminal_engine,
+            terminal_lines: VecDeque::new(),
             last_update: Instant::now(),
             start_time: Instant::now(),
             cache: Cache::new(),
             phase: AnimationPhase::Expanded,
             progress: 1.0,
             // Standard Positionen
-            corner_rect: Rectangle::new(Point::new(1280.0 - 680.0, 720.0 - 460.0), Size::new(640.0, 420.0)),
+            // Ecke unten-rechts (mit kleinem Abstand zum Rand) und deutlich kompakter als das große Fenster
+            corner_rect: Rectangle::new(Point::new(1280.0 - 450.0, 720.0 - 300.0), Size::new(400.0, 250.0)),
             center_rect: Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82)),
         };
         (app, Task::none())
@@ -220,17 +283,49 @@ impl Application for App {
                         self.phase = if self.phase == AnimationPhase::Expanding { AnimationPhase::Expanded } else { AnimationPhase::Collapsed };
                     }
                 }
+                
+                // PTY Polling
+                if let Some(rx) = &self.terminal_engine.receiver {
+                    while let Ok(msg) = rx.try_recv() {
+                        match msg {
+                            terminal::PtyMessage::Output(text, color) => {
+                                let iced_color = match color {
+                                    TextColor::Red => Color::from_rgb(1.0, 0.3, 0.3),
+                                    TextColor::Yellow => Color::from_rgb(1.0, 1.0, 0.3),
+                                    TextColor::Cyan => Color::from_rgb(0.3, 1.0, 1.0),
+                                    TextColor::Green => Color::from_rgb(0.3, 1.0, 0.3),
+                                    TextColor::White => Color::from_rgb(0.9, 0.9, 0.9),
+                                };
+                                self.terminal_lines.push_front((text, iced_color));
+                                if self.terminal_lines.len() > 30 {
+                                    self.terminal_lines.pop_back();
+                                }
+                            }
+                            terminal::PtyMessage::Closed => {
+                                // Eventuell später neu starten oder UI updaten
+                            }
+                        }
+                    }
+                }
+
                 self.cache.clear(); // IMMER den Cache leeren, damit Hover & Pulse funktionieren
             }
             Message::ToggleTerminal => {
                 if self.phase == AnimationPhase::Collapsed {
                     self.phase = AnimationPhase::Expanding;
                     self.progress = 0.0;
+                    // Shell bleibt aktiv, wir rufen nicht mehr spawn_shell() auf
                 } else if self.phase == AnimationPhase::Expanded {
                     self.phase = AnimationPhase::Collapsing;
                     self.progress = 0.0;
+                    // Shell bleibt aktiv, wir rufen nicht mehr kill_shell() auf
+                    // Der Text bleibt in der Ecke sichtbar
                 }
                 self.cache.clear();
+            }
+            Message::TerminalOutput(_, _) | Message::TerminalClosed => {
+                // Diese Messages sind definiert für zukünftige Architektur,
+                // werden aber aktuell synchron im Tick verarbeitet für bessere Performance.
             }
         }
         Task::none()
