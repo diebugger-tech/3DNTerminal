@@ -23,3 +23,29 @@ pub fn is_point_in_quad(p: Point, quad: &[Point; 4]) -> bool {
     let c4 = cross(quad[3], quad[0], p) >= 0.0;
     (c1 && c2 && c3 && c4) || (!c1 && !c2 && !c3 && !c4)
 }
+
+/// Maps a screen point to normalized (0..1, 0..1) coordinates within a quad.
+/// This is a simple bilinear approximation for hit-testing on the hologram surface.
+pub fn project_onto_quad(p: Point, quad: &[Point; 4]) -> Option<(f32, f32)> {
+    if !is_point_in_quad(p, quad) {
+        return None;
+    }
+
+    // Solve for (u, v) such that p = (1-u)(1-v)Q0 + u(1-v)Q1 + uvQ2 + (1-u)vQ3
+    // For simplicity in this terminal, we'll use a distance-based weight or 
+    // a simple triangle decomposition for now.
+    
+    // Better: Just use the quad bounds for a rough estimate if it's almost rectangular,
+    // or implement a proper inverse bilinear map.
+    // For the "Cyberpunk" feel, we can just use the relative position between the edges.
+    
+    let u_top = (p.x - quad[0].x) / (quad[1].x - quad[0].x).max(1.0);
+    let u_bottom = (p.x - quad[3].x) / (quad[2].x - quad[3].x).max(1.0);
+    let v_left = (p.y - quad[0].y) / (quad[3].y - quad[0].y).max(1.0);
+    let v_right = (p.y - quad[1].y) / (quad[2].y - quad[1].y).max(1.0);
+    
+    let u = (u_top + u_bottom) / 2.0;
+    let v = (v_left + v_right) / 2.0;
+    
+    Some((u.clamp(0.0, 1.0), v.clamp(0.0, 1.0)))
+}
