@@ -21,7 +21,9 @@ tracing-subscriber = "0.3"
 vte = "0.15.0"
 
 [features]
-default = []
+default = ["logging"]
+logging = []
+experimental = []
 effects-3d = []
 
 [profile.release]

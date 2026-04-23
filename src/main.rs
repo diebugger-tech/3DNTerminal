@@ -1,3 +1,4 @@
+mod logging;
 
 use std::time::{Instant, Duration};
 use cosmic::{
@@ -30,6 +31,9 @@ pub enum Message {
     CursorMoved(Point),
     MouseClicked(Instant),
     TerminalClosed,
+    MinimizeTerminal,
+    MaximizeTerminal,
+    CloseApp,
 }
 
 
@@ -376,6 +380,7 @@ impl Application for App {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    logging::init();
     let settings = Settings::default()
         .size(Size::new(1280.0, 720.0))
         .transparent(true)
