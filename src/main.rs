@@ -1,8 +1,3 @@
-mod effects;
-mod terminal;
-mod ui;
-mod error;
-mod config;
 
 use std::time::{Instant, Duration};
 use cosmic::{
@@ -21,7 +16,9 @@ use cosmic::{
     Application, Element, Theme,
     widget::container,
 };
-use effects::crossfade::CrossfadeManager;
+use threednterminal::effects::crossfade::CrossfadeManager;
+use threednterminal::terminal::traits::Terminal;
+use threednterminal::{terminal, ui, config, effects, AnimationPhase};
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -35,13 +32,6 @@ pub enum Message {
     TerminalClosed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AnimationPhase {
-    Collapsed,
-    Expanding,
-    Expanded,
-    Collapsing,
-}
 
 use std::sync::mpsc;
 
@@ -80,6 +70,7 @@ pub struct App {
     cache: Cache,
     // --- Terminal State ---
     terminal_engine: terminal::TerminalEngine,
+    config: config::Config,
 
     // --- Background Effects ---
     effect_engine: EffectEngine,
@@ -148,11 +139,13 @@ impl Application for App {
         if let Err(e) = terminal_engine.spawn_shell() {
             eprintln!("Failed to spawn shell: {}", e);
         }
+        let config = config::Config::load("~/.config/3dnterminal/config.toml").unwrap_or_default();
 
         let app = App {
             core,
             effect_engine: EffectEngine::start(1280, 720),
             terminal_engine,
+            config,
             last_update: Instant::now(),
             start_time: Instant::now(),
             cursor_pos: Point::ORIGIN,
@@ -199,12 +192,9 @@ impl Application for App {
                     ));
                 }
 
-                // Grid Dirty Check & Cursor Blink
-                if let Ok(mut grid) = self.terminal_engine.grid.lock() {
-                    if grid.dirty {
-                        needs_redraw = true;
-                        grid.dirty = false;
-                    }
+                // Grid Dirty Check
+                if self.terminal_engine.is_dirty() {
+                    needs_redraw = true;
                 }
 
                 let current_cursor_visible = (now.duration_since(self.start_time).as_millis() / 500) % 2 == 0;
@@ -230,63 +220,29 @@ impl Application for App {
                 }
                 self.cache.clear();
             }
-            Message::KeyPressed(key, modifiers, text) => {
+            Message::KeyPressed(key, modifiers, _text) => {
+                if key == self.config.flip_key {
+                    if self.phase == AnimationPhase::Collapsed {
+                        self.phase = AnimationPhase::Expanding;
+                        self.progress = 0.0;
+                    } else if self.phase == AnimationPhase::Expanded {
+                        self.phase = AnimationPhase::Collapsing;
+                        self.progress = 0.0;
+                    }
+                    self.cache.clear();
+                    return Task::none();
+                }
+
                 if self.phase == AnimationPhase::Expanded {
-                    let mut seq = String::new();
-                    
-                    if let Ok(mut grid) = self.terminal_engine.grid.lock() {
-                        grid.viewport_offset = 0; // Reset scroll on keypress
-                    }
-                    
-                    if modifiers.control() {
-                        match key {
-                            keyboard::Key::Character(c) => {
-                                if let Some(ch) = c.chars().next() {
-                                    let ch_lower = ch.to_ascii_lowercase();
-                                    if ch_lower == 'c' {
-                                        seq.push('\x03'); // Ctrl+C
-                                    } else if ch_lower == 'd' {
-                                        seq.push('\x04'); // Ctrl+D
-                                    } else if ch_lower == 'l' {
-                                        seq.push('\x0c'); // Ctrl+L
-                                    } else if ch_lower >= 'a' && ch_lower <= 'z' {
-                                        let ctrl_code = (ch_lower as u8) - b'a' + 1;
-                                        seq.push(ctrl_code as char);
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    } else {
-                        match key {
-                            keyboard::Key::Named(keyboard::key::Named::Enter) => seq.push('\r'),
-                            keyboard::Key::Named(keyboard::key::Named::Backspace) => seq.push('\x7f'),
-                            keyboard::Key::Named(keyboard::key::Named::ArrowUp) => seq.push_str("\x1b[A"),
-                            keyboard::Key::Named(keyboard::key::Named::ArrowDown) => seq.push_str("\x1b[B"),
-                            keyboard::Key::Named(keyboard::key::Named::ArrowRight) => seq.push_str("\x1b[C"),
-                            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => seq.push_str("\x1b[D"),
-                            keyboard::Key::Named(keyboard::key::Named::Tab) => seq.push('\t'),
-                            _ => {
-                                if let Some(t) = text {
-                                    seq.push_str(&t);
-                                }
-                            }
-                        }
-                    }
-                    
-                    if !seq.is_empty() {
-                        self.terminal_engine.send_key(&seq);
-                    }
+                    self.terminal_engine.send_key(&key, modifiers, &self.config);
                 }
             }
             Message::Scroll(delta) => {
                 if self.phase == AnimationPhase::Expanded {
-                    if let Ok(mut grid) = self.terminal_engine.grid.lock() {
-                        if delta > 0.0 {
-                            grid.scroll_up(3); // Scroll 3 lines per tick
-                        } else if delta < 0.0 {
-                            grid.scroll_down(3);
-                        }
+                    if delta > 0.0 {
+                        self.terminal_engine.scroll_up(3);
+                    } else if delta < 0.0 {
+                        self.terminal_engine.scroll_down(3);
                     }
                 }
             }
@@ -392,9 +348,6 @@ impl Application for App {
             if status == cosmic::iced::event::Status::Ignored {
                 match event {
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) => {
-                        if key == keyboard::Key::Named(keyboard::key::Named::F12) {
-                            return Some(Message::ToggleTerminal);
-                        }
                         return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
                     }
                     Event::Mouse(mouse::Event::CursorMoved { position }) => {

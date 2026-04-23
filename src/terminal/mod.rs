@@ -1,10 +1,16 @@
 pub mod grid;
+pub mod input;
+pub mod traits;
 
 use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use tokio::task::JoinHandle;
 use grid::TerminalGrid;
+
+use crate::config::Config;
+use cosmic::iced::keyboard::{Key, Modifiers};
+use crate::error::AppError;
 
 /// Manages the background PTY process and VTE parser execution.
 /// It spawns a pseudo-terminal, executes a shell, and continuously reads output,
@@ -31,23 +37,8 @@ impl TerminalEngine {
         }
     }
 
-    /// Resizes the PTY process to the given columns and rows.
-    pub fn resize(&mut self, cols: u16, rows: u16) {
-        self.cols = cols;
-        self.rows = rows;
-        if let Some(master) = &mut self.pty_master {
-            let _ = master.resize(PtySize {
-                rows: self.rows,
-                cols: self.cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            });
-        }
-        // Resize grid will be done in Phase 2
-    }
-
     /// Spawns the underlying shell process (/bin/bash) and starts the reader thread.
-    pub fn spawn_shell(&mut self) -> Result<(), String> {
+    pub fn spawn_shell(&mut self) -> Result<(), AppError> {
         if self.pty_master.is_some() {
             return Ok(());
         }
@@ -58,22 +49,22 @@ impl TerminalEngine {
             cols: self.cols,
             pixel_width: 0,
             pixel_height: 0,
-        }).map_err(|e| format!("Failed to open PTY: {}", e))?;
+        }).map_err(|e| AppError::Pty(format!("Failed to open PTY: {}", e)))?;
 
         let cmd = CommandBuilder::new("/bin/bash");
 
         let mut child = pair.slave.spawn_command(cmd)
-            .map_err(|e| format!("Failed to spawn shell: {}", e))?;
+            .map_err(|e| AppError::Pty(format!("Failed to spawn shell: {}", e)))?;
 
         drop(pair.slave);
 
         let mut reader = pair.master.try_clone_reader()
-            .map_err(|e| format!("Failed to clone PTY reader: {}", e))?;
+            .map_err(|e| AppError::Pty(format!("Failed to clone PTY reader: {}", e)))?;
 
         let master = pair.master;
 
         self.pty_writer = Some(master.take_writer()
-            .map_err(|e| format!("Failed to take PTY writer: {}", e))?);
+            .map_err(|e| AppError::Pty(format!("Failed to take PTY writer: {}", e)))?);
 
         self.pty_master = Some(master);
 
@@ -108,11 +99,63 @@ impl TerminalEngine {
         self.pty_master = None;
         self._task = None;
     }
+}
 
-    pub fn send_key(&mut self, key_str: &str) {
-        if let Some(writer) = &mut self.pty_writer {
-            let _ = writer.write_all(key_str.as_bytes());
-            let _ = writer.flush();
+impl traits::Terminal for TerminalEngine {
+    fn send_key(&mut self, key: &Key, modifiers: Modifiers, config: &Config) {
+        if let Some(bytes) = input::key_to_ansi(key, modifiers, config) {
+            if let Some(writer) = &mut self.pty_writer {
+                let _ = writer.write_all(&bytes);
+                let _ = writer.flush();
+            }
+            self.reset_scroll();
+        }
+    }
+
+    fn reset_scroll(&self) {
+        if let Ok(mut g) = self.grid.lock() {
+            g.viewport_offset = 0;
+            g.dirty = true;
+        }
+    }
+
+    fn scroll_up(&self, lines: usize) {
+        if let Ok(mut g) = self.grid.lock() {
+            g.scroll_up(lines);
+            g.dirty = true;
+        }
+    }
+
+    fn scroll_down(&self, lines: usize) {
+        if let Ok(mut g) = self.grid.lock() {
+            g.scroll_down(lines);
+            g.dirty = true;
+        }
+    }
+
+    fn resize(&mut self, cols: u16, rows: u16) {
+        self.cols = cols;
+        self.rows = rows;
+        if let Some(master) = &mut self.pty_master {
+            let _ = master.resize(PtySize {
+                rows: self.rows,
+                cols: self.cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            });
+        }
+        if let Ok(mut g) = self.grid.lock() {
+            g.resize(self.cols as usize, self.rows as usize);
+        }
+    }
+
+    fn is_dirty(&self) -> bool {
+        if let Ok(mut g) = self.grid.lock() {
+            let dirty = g.dirty;
+            g.dirty = false;
+            dirty
+        } else {
+            false
         }
     }
 }

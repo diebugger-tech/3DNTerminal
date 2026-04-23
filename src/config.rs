@@ -5,11 +5,7 @@ use std::path::Path;
 use std::fs;
 use std::env;
 use crate::error::AppError;
-
-pub const DEFAULT_SCROLLBACK: usize = 1000;
-pub const DEFAULT_BLINK_MS: u64 = 500;
-pub const DEFAULT_FONT_SIZE: f32 = 14.0;
-pub const DEFAULT_NEON_COLOR: [f32; 4] = [0.4, 1.0, 0.8, 1.0];
+use crate::constants::*;
 
 #[derive(Debug, Clone)]
 pub struct Config {
