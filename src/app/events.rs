@@ -15,4 +15,5 @@ pub enum Message {
     MinimizeTerminal,
     MaximizeTerminal,
     CloseApp,
+    RawMouseEvent(cosmic::iced::mouse::Event),
 }

@@ -1,6 +1,5 @@
 mod logging;
 
-use std::time::{Instant, Duration};
 use cosmic::{
     app::{Core, Settings, Task},
     iced::{
@@ -10,51 +9,19 @@ use cosmic::{
         Event,
         widget::{
             canvas::{self, Cache, Canvas, Frame, Geometry},
-            stack, image,
         },
         Rectangle, Point, Size, Color,
     },
     Application, Element, Theme,
     widget::container,
 };
-use threednterminal::effects::crossfade::CrossfadeManager;
 use threednterminal::terminal::traits::Terminal;
 use threednterminal::{terminal, ui, config, AnimationPhase};
-
 use threednterminal::app::events::Message;
 
+use std::time::{Instant, Duration};
 
-use std::sync::mpsc;
-
-struct EffectEngine {
-    receiver: mpsc::Receiver<Vec<u8>>,
-}
-
-impl EffectEngine {
-    fn start(width: u32, height: u32) -> Self {
-        let (tx, rx) = mpsc::channel();
-        tokio::task::spawn_blocking(move || {
-            let mut crossfade = CrossfadeManager::new(width, height);
-            let mut bg_pixmap = tiny_skia::Pixmap::new(width, height).unwrap();
-            let mut last_update = Instant::now();
-            
-            loop {
-                let now = Instant::now();
-                let dt = now.duration_since(last_update).as_secs_f32();
-                last_update = now;
-                
-                crossfade.tick(dt, &mut bg_pixmap.as_mut());
-                if tx.send(bg_pixmap.data().to_vec()).is_err() {
-                    break;
-                }
-                
-                // Limitiere den Background-Thread auf ~60 FPS
-                std::thread::sleep(Duration::from_millis(16));
-            }
-        });
-        Self { receiver: rx }
-    }
-}
+// EffectEngine removed as requested - running directly on desktop
 
 pub struct App {
     core: Core,
@@ -62,10 +29,6 @@ pub struct App {
     // --- Terminal State ---
     terminal_engine: terminal::TerminalEngine,
     config: config::Config,
-
-    // --- Background Effects ---
-    effect_engine: EffectEngine,
-    bg_handle: Option<image::Handle>,
 
     // --- Animation State ---
     phase: AnimationPhase,
@@ -84,6 +47,7 @@ pub struct App {
     
     // UI Components
     window_controls: ui::window_controls::WindowControls,
+    last_p2: Point,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -136,9 +100,11 @@ impl Application for App {
         }
         let config = config::Config::load("~/.config/3dnterminal/config.toml").unwrap_or_default();
 
+        let corner_rect = Rectangle::new(Point::new(1280.0 - 450.0, 720.0 - 300.0), Size::new(400.0, 250.0));
+        let center_rect = Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82));
+
         let app = App {
             core,
-            effect_engine: EffectEngine::start(1280, 720),
             terminal_engine,
             config,
             last_update: Instant::now(),
@@ -147,19 +113,22 @@ impl Application for App {
             last_click_time: Instant::now() - Duration::from_secs(10),
             cursor_visible: true,
             cache: Cache::new(),
-            bg_handle: None,
             phase: AnimationPhase::Expanded,
             progress: 1.0,
-            // Standard Positionen
-            // Ecke unten-rechts (mit kleinem Abstand zum Rand) und deutlich kompakter als das große Fenster
-            corner_rect: Rectangle::new(Point::new(1280.0 - 450.0, 720.0 - 300.0), Size::new(400.0, 250.0)),
-            center_rect: Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82)),
+            corner_rect,
+            center_rect,
             window_controls: ui::window_controls::WindowControls::new(),
+            last_p2: Point::ORIGIN,
         };
+
+        // Initial button positioning removed - now stateless
         (app, Task::none())
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
+        if !matches!(message, Message::Tick(_)) {
+            tracing::debug!("Update Message: {:?}", message);
+        }
         match message {
             Message::Tick(now) => {
                 let dt = now.duration_since(self.last_update).as_secs_f32();
@@ -179,15 +148,6 @@ impl Application for App {
                     needs_redraw = true;
                 }
                 
-                // --- UPDATE BACKGROUND EFFECTS ---
-                while let Ok(frame_data) = self.effect_engine.receiver.try_recv() {
-                    self.bg_handle = Some(image::Handle::from_rgba(
-                        1280,
-                        720,
-                        frame_data
-                    ));
-                }
-
                 // Grid Dirty Check
                 if self.terminal_engine.is_dirty() {
                     needs_redraw = true;
@@ -199,27 +159,25 @@ impl Application for App {
                     needs_redraw = true;
                 }
 
+                if self.phase == AnimationPhase::Expanded || self.phase == AnimationPhase::Collapsed {
+                    let rect = if self.phase == AnimationPhase::Expanded {
+                        self.center_rect
+                    } else {
+                        self.corner_rect
+                    };
+                    
+                    let margin_y = (rect.height * 0.05).clamp(10.0, 30.0);
+                    let base_font_size = (rect.height / 30.0).clamp(10.0, 18.0);
+                    
+                    self.last_p2 = Point::new(
+                        rect.x + rect.width,
+                        rect.y + margin_y + base_font_size,
+                    );
+                }
+
                 if needs_redraw {
                     self.cache.clear();
                 }
-
-                // Update Window Controls positions based on current quad
-                let params = ui::hologram::HologramParams {
-                    phase: self.phase,
-                    progress: self.progress,
-                    start_time: self.start_time,
-                    corner_rect: self.corner_rect,
-                    center_rect: self.center_rect,
-                    cursor_visible: self.cursor_visible,
-                    window_controls: None,
-                };
-                let quad = ui::hologram::get_quad(&params);
-                // Top-right corner of the hologram is quad[1]
-                // We want the buttons to follow the 3D perspective
-                // For now, we'll position them near quad[1] (top-right)
-                let button_size = (quad[1].x - quad[0].x).abs() * 0.05;
-                let button_size = button_size.clamp(15.0, 30.0);
-                self.window_controls.update_positions(quad[1], button_size, button_size * 0.2);
             }
             Message::ToggleTerminal => {
                 let old_phase = self.phase;
@@ -231,6 +189,7 @@ impl Application for App {
                     self.progress = 0.0;
                 }
                 tracing::info!("ToggleTerminal: {:?} -> {:?}", old_phase, self.phase);
+                
                 self.cache.clear();
             }
             Message::KeyPressed(key, modifiers, _text) => {
@@ -253,15 +212,7 @@ impl Application for App {
                     self.terminal_engine.send_key(&key, modifiers, &self.config);
                 }
             }
-            Message::Scroll(delta) => {
-                if self.phase == AnimationPhase::Expanded {
-                    if delta > 0.0 {
-                        self.terminal_engine.scroll_up(3);
-                    } else if delta < 0.0 {
-                        self.terminal_engine.scroll_down(3);
-                    }
-                }
-            }
+            Message::Scroll(_) => {}
             Message::WindowResized(width, height) => {
                 // Update rects
                 self.corner_rect = Rectangle::new(Point::new(width - 450.0, height - 300.0), Size::new(400.0, 250.0));
@@ -288,65 +239,8 @@ impl Application for App {
                 
                 self.cache.clear();
             }
-            Message::CursorMoved(pos) => {
-                self.cursor_pos = pos;
-                
-                let params = ui::hologram::HologramParams {
-                    phase: self.phase,
-                    progress: self.progress,
-                    start_time: self.start_time,
-                    corner_rect: self.corner_rect,
-                    center_rect: self.center_rect,
-                    cursor_visible: self.cursor_visible,
-                    window_controls: None,
-                };
-                let quad = ui::hologram::get_quad(&params);
-                
-                if let Some((u, v)) = ui::math::project_onto_quad(pos, &quad) {
-                    self.window_controls.update_hover(u, v);
-                    self.cache.clear();
-                } else {
-                    self.window_controls.minimize_btn.set_hover(false);
-                    self.window_controls.maximize_btn.set_hover(false);
-                    self.window_controls.close_btn.set_hover(false);
-                }
-            }
-            Message::MouseClicked(now) => {
-                let is_double_click = now.duration_since(self.last_click_time) < Duration::from_millis(300);
-                self.last_click_time = now;
-                
-                let params = ui::hologram::HologramParams {
-                    phase: self.phase,
-                    progress: self.progress,
-                    start_time: self.start_time,
-                    corner_rect: self.corner_rect,
-                    center_rect: self.center_rect,
-                    cursor_visible: self.cursor_visible,
-                    window_controls: None,
-                };
-                let quad = ui::hologram::get_quad(&params);
-                
-                if let Some((u, v)) = ui::math::project_onto_quad(self.cursor_pos, &quad) {
-                    if let Some(msg) = self.window_controls.handle_click(u, v) {
-                        tracing::info!("Button clicked: {:?}", msg);
-                        return Task::perform(async move { msg }, |m| cosmic::Action::App(m));
-                    }
-
-                    if self.phase == AnimationPhase::Collapsed {
-                        tracing::info!("Terminal expanded via click");
-                        self.phase = AnimationPhase::Expanding;
-                        self.progress = 0.0;
-                        self.cache.clear();
-                    } else if self.phase == AnimationPhase::Expanded {
-                        if is_double_click || v < 0.1 { // Header click or double click
-                            tracing::info!("Terminal collapsed via header click/double-click");
-                            self.phase = AnimationPhase::Collapsing;
-                            self.progress = 0.0;
-                            self.cache.clear();
-                        }
-                    }
-                }
-            }
+            Message::CursorMoved(_) => {}
+            Message::MouseClicked(_) => {}
             Message::MinimizeTerminal => {
                 tracing::info!("Message: MinimizeTerminal");
                 if self.phase == AnimationPhase::Expanded {
@@ -364,6 +258,76 @@ impl Application for App {
                 std::process::exit(0);
             }
             Message::TerminalClosed => {}
+            Message::RawMouseEvent(ev) => {
+                match ev {
+                    mouse::Event::CursorMoved { position } => {
+                        self.cursor_pos = position;
+                        self.cache.clear();
+                    }
+                    mouse::Event::ButtonReleased(mouse::Button::Left) => {
+                        let click_pos = self.cursor_pos;
+                        tracing::info!("🎯 Left Click at {:?}", click_pos);
+
+                        let now = Instant::now();
+                        let is_double_click = now.duration_since(self.last_click_time) < Duration::from_millis(300);
+                        self.last_click_time = now;
+                        
+                        let params = ui::hologram::HologramParams {
+                            phase: self.phase,
+                            progress: self.progress,
+                            start_time: self.start_time,
+                            corner_rect: self.corner_rect,
+                            center_rect: self.center_rect,
+                            cursor_visible: self.cursor_visible,
+                            window_controls: None,
+                        };
+                        let quad = ui::hologram::get_quad(&params);
+                        
+                        // 1. Check window controls first (stateless hit_test)
+                        let btn_size = (self.center_rect.width * 0.03).clamp(12.0, 26.0);
+                        if let Some(action) = self.window_controls.hit_test(click_pos, self.last_p2, btn_size) {
+                            let msg = match action {
+                                ui::window_controls::ButtonAction::Minimize => Message::MinimizeTerminal,
+                                ui::window_controls::ButtonAction::Maximize => Message::MaximizeTerminal,
+                                ui::window_controls::ButtonAction::Close    => Message::CloseApp,
+                            };
+                            tracing::info!("🎯 Button getroffen: {:?}", msg);
+                            return self.update(msg);
+                        }
+
+                        // 2. Then check general quad interaction
+                        if let Some((_u, v)) = ui::math::project_onto_quad(self.cursor_pos, &quad) {
+                            if self.phase == AnimationPhase::Collapsed {
+                                tracing::info!("Terminal expanded via click");
+                                self.phase = AnimationPhase::Expanding;
+                                self.progress = 0.0;
+                                self.cache.clear();
+                            } else if self.phase == AnimationPhase::Expanded {
+                                if is_double_click || v < 0.1 { // Header click or double click
+                                    tracing::info!("Terminal collapsed via header click/double-click");
+                                    self.phase = AnimationPhase::Collapsing;
+                                    self.progress = 0.0;
+                                    self.cache.clear();
+                                }
+                            }
+                        }
+                    }
+                    mouse::Event::WheelScrolled { delta } => {
+                        if self.phase == AnimationPhase::Expanded {
+                            let scroll_val = match delta {
+                                mouse::ScrollDelta::Lines { y, .. } => y,
+                                mouse::ScrollDelta::Pixels { y, .. } => y.signum(),
+                            };
+                            if scroll_val > 0.0 {
+                                self.terminal_engine.scroll_up(3);
+                            } else if scroll_val < 0.0 {
+                                self.terminal_engine.scroll_down(3);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
         Task::none()
     }
@@ -373,55 +337,39 @@ impl Application for App {
             .width(Length::Fill)
             .height(Length::Fill);
 
-        let mut layers: Vec<Element<'_, Message>> = Vec::new();
-        
-        // Hintergrund-Effekte rendern (falls vorhanden)
-        if let Some(handle) = &self.bg_handle {
-            let img = image(handle.clone())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .content_fit(cosmic::iced::ContentFit::Fill);
-            layers.push(img.into());
-        }
-        
-        // Canvas (Hologramm) drüberlegen
-        layers.push(canvas.into());
-
-        container(stack(layers))
+        container(canvas)
             .width(Length::Fill)
             .height(Length::Fill)
+            .style(|_theme: &Theme| container::Style {
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.01).into()),
+                ..Default::default()
+            })
             .into()
     }
 
     fn subscription(&self) -> Subscription<Message> {
         let tick = cosmic::iced::time::every(Duration::from_millis(16)).map(Message::Tick);
         
-        let events = cosmic::iced::event::listen_with(|event, status, _window_id| {
-            if status == cosmic::iced::event::Status::Ignored {
-                match event {
+        let events = cosmic::iced::event::listen_with(|event, _status, _window_id| {
+            // Log ALL mouse events as requested
+            if let Event::Mouse(mouse_event) = &event {
+                tracing::info!("Subscription: Raw Mouse Event: {:?}", mouse_event);
+            }
+
+            match event {
+                    Event::Mouse(ev) => {
+                        return Some(Message::RawMouseEvent(ev));
+                    }
                     Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) => {
                         return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
-                    }
-                    Event::Mouse(mouse::Event::CursorMoved { position }) => {
-                        return Some(Message::CursorMoved(position));
-                    }
-                    Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                        return Some(Message::MouseClicked(Instant::now()));
-                    }
-                    Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
-                        match delta {
-                            mouse::ScrollDelta::Lines { y, .. } => return Some(Message::Scroll(y)),
-                            mouse::ScrollDelta::Pixels { y, .. } => return Some(Message::Scroll(y.signum())),
-                        }
                     }
                     Event::Window(cosmic::iced::window::Event::Resized(size)) => {
                         return Some(Message::WindowResized(size.width, size.height));
                     }
                     _ => {}
                 }
-            }
-            None
-        });
+                None
+            });
 
         Subscription::batch(vec![tick, events])
     }

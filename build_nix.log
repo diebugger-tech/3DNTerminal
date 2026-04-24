@@ -1,0 +1,30 @@
+warning: Git tree '/home/andreas/3DNTerminal' is dirty
+error (ignored): SQLite database '/home/andreas/.cache/nix/eval-cache-v6/125e1b2afe90284ba6fdacb2001df38d1dee6d5f7bebf374588ae13f3c6931a9.sqlite' is busy
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling threednterminal v0.1.0 (/home/andreas/3DNTerminal)
+error[E0308]: mismatched types
+   --> src/main.rs:288:66
+    |
+288 |                     return Task::perform(async move { msg }, |m| m);
+    |                                                                  ^ expected `Action<_>`, found `Message`
+    |
+    = note: expected enum `cosmic::Action<_>`
+               found enum `Message`
+help: try wrapping the expression in `cosmic::Action::App`
+    |
+288 |                     return Task::perform(async move { msg }, |m| cosmic::Action::App(m));
+    |                                                                  ++++++++++++++++++++ +
+
+warning: unused variable: `status`
+   --> src/main.rs:348:63
+    |
+348 |         let events = cosmic::iced::event::listen_with(|event, status, _window_id| {
+    |                                                               ^^^^^^ help: if this is intentional, prefix it with an underscore: `_status`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc --explain E0308`.
+warning: `threednterminal` (bin "3dnterm") generated 1 warning
+error: could not compile `threednterminal` (bin "3dnterm") due to 1 previous error; 1 warning emitted

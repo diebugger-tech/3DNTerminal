@@ -135,11 +135,8 @@ pub fn draw(
             );
 
             if let Some(controls) = params.window_controls {
-                // We need to update button positions based on current 3D geometry
-                // For simplicity, we draw them in the projected space
-                // This is a bit tricky with the current Button::draw which expects absolute coords.
-                // However, since we are in the canvas frame, we can just draw them.
-                controls.draw(frame, border_alpha * flip_alpha);
+                let btn_size = (target_rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
+                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size);
             }
         }
 

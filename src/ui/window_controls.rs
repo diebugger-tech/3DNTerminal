@@ -1,70 +1,78 @@
-use cosmic::iced::{Point, widget::canvas::Frame};
-use super::button::Button;
-use crate::app::events::Message;
+use cosmic::iced::{Point, Color, widget::canvas::{Frame, Path, Stroke}, Pixels, Size};
 
-pub struct WindowControls {
-    pub minimize_btn: Button,
-    pub maximize_btn: Button,
-    pub close_btn: Button,
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ButtonAction {
+    Minimize,
+    Maximize,
+    Close,
 }
+
+pub struct WindowControls;
 
 impl WindowControls {
     pub fn new() -> Self {
-        Self {
-            minimize_btn: Button::new(0.0, 0.0, 30.0, 30.0, "−", "Minimize"),
-            maximize_btn: Button::new(0.0, 0.0, 30.0, 30.0, "□", "Maximize"),
-            close_btn: Button::new(0.0, 0.0, 30.0, 30.0, "×", "Close [Alt+Q]"),
+        Self
+    }
+
+    pub fn draw(&self, frame: &mut Frame, alpha: f32, anchor: Point, btn_size: f32) {
+        if alpha <= 0.0 { return; }
+        let gap = btn_size * 0.3;
+        
+        // anchor = p2 (top-right des Quads)
+        // Buttons links von anchor, von rechts nach links: Close, Maximize, Minimize
+        let buttons = [
+            (anchor.x - btn_size,                     "×"),
+            (anchor.x - btn_size * 2.0 - gap,         "□"),
+            (anchor.x - btn_size * 3.0 - gap * 2.0,   "−"),
+        ];
+
+        for (bx, icon) in buttons {
+            let by = anchor.y + btn_size * 1.2; // leicht unter p2
+            let path = Path::rectangle(
+                Point::new(bx, by),
+                Size::new(btn_size, btn_size),
+            );
+            frame.stroke(&path, Stroke::default()
+                .with_color(Color::from_rgba(0.4, 1.0, 0.8, alpha))
+                .with_width(1.0));
+            
+            frame.fill_text(cosmic::iced::widget::canvas::Text {
+                content: icon.to_string(),
+                position: Point::new(bx + btn_size * 0.5, by + btn_size * 0.5),
+                color: Color::from_rgba(0.4, 1.0, 0.8, alpha),
+                size: Pixels(btn_size * 0.7),
+                align_x: cosmic::iced::alignment::Horizontal::Center.into(),
+                align_y: cosmic::iced::alignment::Vertical::Center.into(),
+                ..Default::default()
+            });
         }
     }
 
-    pub fn update_positions(&mut self, top_right: Point, button_size: f32, spacing: f32) {
-        let x_close = top_right.x - button_size;
-        let x_max = x_close - button_size - spacing;
-        let x_min = x_max - button_size - spacing;
-        let y = top_right.y;
+    pub fn hit_test(&self, click: Point, anchor: Point, btn_size: f32) -> Option<ButtonAction> {
+        let gap = btn_size * 0.3;
+        let by = anchor.y + btn_size * 1.2;
+        let buttons = [
+            (anchor.x - btn_size,               ButtonAction::Close),
+            (anchor.x - btn_size * 2.0 - gap,   ButtonAction::Maximize),
+            (anchor.x - btn_size * 3.0 - gap * 2.0, ButtonAction::Minimize),
+        ];
 
-        self.close_btn.x = x_close;
-        self.close_btn.y = y;
-        self.maximize_btn.x = x_max;
-        self.maximize_btn.y = y;
-        self.minimize_btn.x = x_min;
-        self.minimize_btn.y = y;
-        
-        self.minimize_btn.width = button_size;
-        self.minimize_btn.height = button_size;
-        self.maximize_btn.width = button_size;
-        self.maximize_btn.height = button_size;
-        self.close_btn.width = button_size;
-        self.close_btn.height = button_size;
-    }
+        tracing::debug!(
+            "hit_test: click=({:.1},{:.1}) anchor=({:.1},{:.1}) btn_size={:.1}",
+            click.x, click.y, anchor.x, anchor.y, btn_size
+        );
 
-    pub fn draw(&self, frame: &mut Frame, alpha: f32) {
-        self.minimize_btn.draw(frame, alpha);
-        self.maximize_btn.draw(frame, alpha);
-        self.close_btn.draw(frame, alpha);
-    }
-
-    /// Checks if a normalized point (u, v) hits any button.
-    /// Returns the message to dispatch if clicked.
-    pub fn update_hover(&mut self, u: f32, v: f32) {
-        // Assume header is top 10% (v < 0.1)
-        // Buttons are at the right end (u > 0.8)
-        let is_header = v < 0.1;
-        
-        self.minimize_btn.set_hover(is_header && u > 0.85 && u < 0.9);
-        self.maximize_btn.set_hover(is_header && u > 0.9 && u < 0.95);
-        self.close_btn.set_hover(is_header && u > 0.95);
-    }
-
-    pub fn handle_click(&self, u: f32, v: f32) -> Option<Message> {
-        let is_header = v < 0.1;
-        if is_header {
-            if u > 0.95 {
-                return Some(Message::CloseApp);
-            } else if u > 0.9 && u < 0.95 {
-                return Some(Message::MaximizeTerminal);
-            } else if u > 0.85 && u < 0.9 {
-                return Some(Message::MinimizeTerminal);
+        for (bx, action) in buttons {
+            let hit = click.x >= bx && click.x <= bx + btn_size
+                   && click.y >= by && click.y <= by + btn_size;
+            
+            tracing::debug!(
+                "  {:?}: rect ({:.1},{:.1})→({:.1},{:.1}) hit={}",
+                action, bx, by, bx + btn_size, by + btn_size, hit
+            );
+            
+            if hit {
+                return Some(action);
             }
         }
         None
