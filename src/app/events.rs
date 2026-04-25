@@ -1,6 +1,7 @@
 use cosmic::iced::keyboard::{Key, Modifiers};
 use cosmic::iced::Point;
 use std::time::Instant;
+use crate::app::state::CornerPosition;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -15,5 +16,6 @@ pub enum Message {
     MinimizeTerminal,
     MaximizeTerminal,
     CloseApp,
+    SetCorner(CornerPosition),
     RawMouseEvent(cosmic::iced::mouse::Event),
 }

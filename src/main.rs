@@ -16,7 +16,7 @@ use cosmic::{
     widget::container,
 };
 use threednterminal::terminal::traits::Terminal;
-use threednterminal::{terminal, ui, config, AnimationPhase};
+use threednterminal::{terminal, ui, config, AnimationPhase, CornerPosition};
 use threednterminal::app::events::Message;
 
 use std::time::{Instant, Duration};
@@ -44,10 +44,13 @@ pub struct App {
     // Config
     corner_rect: Rectangle,
     center_rect: Rectangle,
-    
+    window_width: f32,
+    window_height: f32,
+
     // UI Components
     window_controls: ui::window_controls::WindowControls,
     last_p2: Point,
+    active_corner: CornerPosition,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -70,6 +73,7 @@ impl canvas::Program<Message, Theme> for App {
                 center_rect: self.center_rect,
                 cursor_visible: self.cursor_visible,
                 window_controls: Some(&self.window_controls),
+                active_corner: self.active_corner,
             };
             
             let (_, _, alpha) = ui::hologram::calculate_3d_geometry(&params);
@@ -81,6 +85,21 @@ impl canvas::Program<Message, Theme> for App {
             ui::hologram::draw(frame, &self.terminal_engine.grid, &params);
         });
         vec![geometry]
+    }
+}
+
+impl App {
+    fn update_anchor(&mut self) {
+        let rect = match self.phase {
+            AnimationPhase::Expanded | AnimationPhase::Expanding => self.center_rect,
+            _ => self.corner_rect,
+        };
+        let margin_y = (rect.height * 0.05).clamp(10.0, 30.0);
+        let base_font_size = (rect.height / 30.0).clamp(10.0, 18.0);
+        self.last_p2 = Point::new(
+            rect.x + rect.width,
+            rect.y + margin_y + base_font_size,
+        );
     }
 }
 
@@ -100,8 +119,11 @@ impl Application for App {
         }
         let config = config::Config::load("~/.config/3dnterminal/config.toml").unwrap_or_default();
 
-        let corner_rect = Rectangle::new(Point::new(1280.0 - 450.0, 720.0 - 300.0), Size::new(400.0, 250.0));
-        let center_rect = Rectangle::new(Point::new(1280.0 * 0.06, 720.0 * 0.09), Size::new(1280.0 * 0.88, 720.0 * 0.82));
+        let init_w = 1280.0_f32;
+        let init_h = 720.0_f32;
+        let active_corner = CornerPosition::BottomRight;
+        let corner_rect = active_corner.corner_rect(init_w, init_h);
+        let center_rect = Rectangle::new(Point::new(init_w * 0.06, init_h * 0.09), Size::new(init_w * 0.88, init_h * 0.82));
 
         let app = App {
             core,
@@ -117,12 +139,15 @@ impl Application for App {
             progress: 1.0,
             corner_rect,
             center_rect,
+            window_width: init_w,
+            window_height: init_h,
             window_controls: ui::window_controls::WindowControls::new(),
             last_p2: Point::ORIGIN,
+            active_corner,
         };
 
-        // Initial button positioning removed - now stateless
-        (app, Task::none())
+        let maximize_task = app.core.maximize(None, true);
+        (app, maximize_task)
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -159,21 +184,7 @@ impl Application for App {
                     needs_redraw = true;
                 }
 
-                if self.phase == AnimationPhase::Expanded || self.phase == AnimationPhase::Collapsed {
-                    let rect = if self.phase == AnimationPhase::Expanded {
-                        self.center_rect
-                    } else {
-                        self.corner_rect
-                    };
-                    
-                    let margin_y = (rect.height * 0.05).clamp(10.0, 30.0);
-                    let base_font_size = (rect.height / 30.0).clamp(10.0, 18.0);
-                    
-                    self.last_p2 = Point::new(
-                        rect.x + rect.width,
-                        rect.y + margin_y + base_font_size,
-                    );
-                }
+                self.update_anchor();
 
                 if needs_redraw {
                     self.cache.clear();
@@ -214,9 +225,11 @@ impl Application for App {
             }
             Message::Scroll(_) => {}
             Message::WindowResized(width, height) => {
-                // Update rects
-                self.corner_rect = Rectangle::new(Point::new(width - 450.0, height - 300.0), Size::new(400.0, 250.0));
+                self.window_width = width;
+                self.window_height = height;
+                self.corner_rect = self.active_corner.corner_rect(width, height);
                 self.center_rect = Rectangle::new(Point::new(width * 0.06, height * 0.09), Size::new(width * 0.88, height * 0.82));
+                self.update_anchor();
                 
                 // Calculate new grid size based on expanded mode (center_rect)
                 let base_font_size = (self.center_rect.height / 30.0).clamp(10.0, 18.0);
@@ -242,20 +255,45 @@ impl Application for App {
             Message::CursorMoved(_) => {}
             Message::MouseClicked(_) => {}
             Message::MinimizeTerminal => {
-                tracing::info!("Message: MinimizeTerminal");
-                if self.phase == AnimationPhase::Expanded {
-                    self.phase = AnimationPhase::Collapsing;
+                tracing::info!("Message: MinimizeTerminal -> taskbar");
+                return self.core.minimize(None);
+            }
+            Message::MaximizeTerminal => {
+                tracing::info!("Message: MaximizeTerminal -> Expanding");
+                if self.phase != AnimationPhase::Expanded && self.phase != AnimationPhase::Expanding {
+                    self.phase = AnimationPhase::Expanding;
                     self.progress = 0.0;
                     self.cache.clear();
                 }
             }
-            Message::MaximizeTerminal => {
-                tracing::info!("Message: MaximizeTerminal (Reserved)");
-            }
             Message::CloseApp => {
-                tracing::info!("Message: CloseApp - Shutting down");
-                // In a real app, we might want to send a close request to the window manager
-                std::process::exit(0);
+                tracing::info!("Message: CloseApp -> Hidden");
+                self.phase = AnimationPhase::Hidden;
+                self.cache.clear();
+            }
+            Message::SetCorner(pos) => {
+                tracing::info!("Message: SetCorner -> {:?}", pos);
+                let already_at_corner = self.active_corner == pos
+                    && (self.phase == AnimationPhase::Collapsed
+                        || self.phase == AnimationPhase::Collapsing);
+                if already_at_corner {
+                    // Nochmal gleiche Ecke → zurück zur Mitte
+                    tracing::info!("SetCorner: toggle → Expanding");
+                    self.phase = AnimationPhase::Expanding;
+                    self.progress = 0.0;
+                } else {
+                    // Neue Ecke → corner_rect updaten + zur Ecke flippen
+                    self.active_corner = pos;
+                    self.corner_rect = pos.corner_rect(self.window_width, self.window_height);
+                    if self.phase != AnimationPhase::Collapsing {
+                        self.phase = AnimationPhase::Collapsing;
+                        self.progress = 0.0;
+                    }
+                    // Wenn bereits Collapsing: corner_rect wurde geupdated, Animation
+                    // läuft weiter zur neuen Ecke
+                }
+                self.update_anchor();
+                self.cache.clear();
             }
             Message::TerminalClosed => {}
             Message::RawMouseEvent(ev) => {
@@ -269,47 +307,33 @@ impl Application for App {
                         tracing::info!("🎯 Left Click at {:?}", click_pos);
 
                         let now = Instant::now();
-                        let is_double_click = now.duration_since(self.last_click_time) < Duration::from_millis(300);
                         self.last_click_time = now;
                         
-                        let params = ui::hologram::HologramParams {
-                            phase: self.phase,
-                            progress: self.progress,
-                            start_time: self.start_time,
-                            corner_rect: self.corner_rect,
-                            center_rect: self.center_rect,
-                            cursor_visible: self.cursor_visible,
-                            window_controls: None,
-                        };
-                        let quad = ui::hologram::get_quad(&params);
-                        
-                        // 1. Check window controls first (stateless hit_test)
-                        let btn_size = (self.center_rect.width * 0.03).clamp(12.0, 26.0);
-                        if let Some(action) = self.window_controls.hit_test(click_pos, self.last_p2, btn_size) {
-                            let msg = match action {
-                                ui::window_controls::ButtonAction::Minimize => Message::MinimizeTerminal,
-                                ui::window_controls::ButtonAction::Maximize => Message::MaximizeTerminal,
-                                ui::window_controls::ButtonAction::Close    => Message::CloseApp,
-                            };
-                            tracing::info!("🎯 Button getroffen: {:?}", msg);
-                            return self.update(msg);
-                        }
-
-                        // 2. Then check general quad interaction
-                        if let Some((_u, v)) = ui::math::project_onto_quad(self.cursor_pos, &quad) {
-                            if self.phase == AnimationPhase::Collapsed {
-                                tracing::info!("Terminal expanded via click");
+                        // 1. Hidden-Modus: Klick auf Icon → Expand
+                        if self.phase == AnimationPhase::Hidden {
+                            let icon_x = self.corner_rect.x + self.corner_rect.width - 20.0;
+                            let icon_y = self.corner_rect.y + self.corner_rect.height - 20.0;
+                            if click_pos.x >= icon_x && click_pos.x <= icon_x + 16.0
+                            && click_pos.y >= icon_y && click_pos.y <= icon_y + 16.0 {
+                                tracing::info!("Terminal restored from Hidden state");
                                 self.phase = AnimationPhase::Expanding;
                                 self.progress = 0.0;
                                 self.cache.clear();
-                            } else if self.phase == AnimationPhase::Expanded {
-                                if is_double_click || v < 0.1 { // Header click or double click
-                                    tracing::info!("Terminal collapsed via header click/double-click");
-                                    self.phase = AnimationPhase::Collapsing;
-                                    self.progress = 0.0;
-                                    self.cache.clear();
-                                }
                             }
+                            return Task::none();
+                        }
+
+                        // 2. Check window controls first (stateless hit_test)
+                        let btn_size = (self.center_rect.width * 0.03).clamp(12.0, 26.0);
+                        if let Some(action) = self.window_controls.hit_test(click_pos, self.last_p2, btn_size) {
+                            let msg = match action {
+                                ui::window_controls::ButtonAction::Minimize         => Message::MinimizeTerminal,
+                                ui::window_controls::ButtonAction::Maximize         => Message::MaximizeTerminal,
+                                ui::window_controls::ButtonAction::Close            => Message::CloseApp,
+                                ui::window_controls::ButtonAction::SetCorner(pos)  => Message::SetCorner(pos),
+                            };
+                            tracing::info!("🎯 Button getroffen: {:?}", msg);
+                            return self.update(msg);
                         }
                     }
                     mouse::Event::WheelScrolled { delta } => {

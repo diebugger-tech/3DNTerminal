@@ -7,6 +7,30 @@ pub enum AnimationPhase {
     Expanding,
     Expanded,
     Collapsing,
+    Hidden,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum CornerPosition {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl CornerPosition {
+    pub fn corner_rect(self, window_width: f32, window_height: f32) -> Rectangle {
+        let w = 400.0_f32;
+        let h = 250.0_f32;
+        let m = 20.0_f32;
+        let (x, y) = match self {
+            CornerPosition::TopLeft     => (m, m),
+            CornerPosition::TopRight    => (window_width - w - m, m),
+            CornerPosition::BottomLeft  => (m, window_height - h - m),
+            CornerPosition::BottomRight => (window_width - w - m, window_height - h - m),
+        };
+        Rectangle::new(Point::new(x, y), Size::new(w, h))
+    }
 }
 
 pub struct AppState {
