@@ -2,7 +2,7 @@ use cosmic::iced::{Point, Rectangle, Size, Color, widget::canvas::{Frame, Path, 
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
 use crate::terminal::grid::TerminalGrid;
-use crate::AnimationPhase;
+use crate::{AnimationPhase, CornerPosition};
 use super::math;
 
 pub struct HologramParams<'a> {
@@ -13,6 +13,7 @@ pub struct HologramParams<'a> {
     pub center_rect: Rectangle,
     pub cursor_visible: bool,
     pub window_controls: Option<&'a crate::ui::window_controls::WindowControls>,
+    pub active_corner: CornerPosition,
 }
 
 pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
@@ -42,6 +43,7 @@ pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
                 (params.center_rect, angle, alpha)
             }
         }
+        AnimationPhase::Hidden => (params.corner_rect, 0.0, 0.0),
     }
 }
 
@@ -66,6 +68,17 @@ pub fn draw(
     grid_mutex: &Arc<Mutex<TerminalGrid>>,
     params: &HologramParams,
 ) {
+    // Wenn Hidden: kleines Icon in Ecke zeichnen, sonst nichts
+    if matches!(params.phase, AnimationPhase::Hidden) {
+        frame.fill_rectangle(
+            Point::new(params.corner_rect.x + params.corner_rect.width - 20.0, 
+                       params.corner_rect.y + params.corner_rect.height - 20.0),
+            Size::new(16.0, 16.0),
+            Color::from_rgba(0.4, 1.0, 0.8, 0.8),
+        );
+        return;
+    }
+
     let (target_rect, angle_y, alpha) = calculate_3d_geometry(params);
     
     let quad = get_quad(params);
@@ -136,7 +149,7 @@ pub fn draw(
 
             if let Some(controls) = params.window_controls {
                 let btn_size = (target_rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
-                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size);
+                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size, params.active_corner);
             }
         }
 
