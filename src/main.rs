@@ -96,8 +96,12 @@ impl App {
         };
         let margin_y = (rect.height * 0.05).clamp(10.0, 30.0);
         let base_font_size = (rect.height / 30.0).clamp(10.0, 18.0);
+        
+        let is_left_corner = matches!(self.active_corner, CornerPosition::TopLeft | CornerPosition::BottomLeft);
+        let anchor_x = if is_left_corner { rect.x } else { rect.x + rect.width };
+
         self.last_p2 = Point::new(
-            rect.x + rect.width,
+            anchor_x,
             rect.y + margin_y + base_font_size,
         );
     }
@@ -325,7 +329,7 @@ impl Application for App {
 
                         // 2. Check window controls first (stateless hit_test)
                         let btn_size = (self.center_rect.width * 0.03).clamp(12.0, 26.0);
-                        if let Some(action) = self.window_controls.hit_test(click_pos, self.last_p2, btn_size) {
+                        if let Some(action) = self.window_controls.hit_test(click_pos, self.last_p2, btn_size, self.active_corner) {
                             let msg = match action {
                                 ui::window_controls::ButtonAction::Minimize         => Message::MinimizeTerminal,
                                 ui::window_controls::ButtonAction::Maximize         => Message::MaximizeTerminal,
