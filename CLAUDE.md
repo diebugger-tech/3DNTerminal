@@ -1,3 +1,10 @@
+---
+project: 3DNTerminal
+tags: [rust, cosmic, terminal, rules]
+agent: claude
+type: rules
+---
+
 # Arbeitsregeln für Claude in diesem Projekt
 
 ## Build-Regeln
@@ -30,6 +37,12 @@ Bei komplexen Tasks immer den optimalen Agent vorschlagen statt selbst zu implem
 
 **Regel:** Vor jeder größeren Implementierung fragen:
 > "Soll ich das selbst machen oder einen Prompt für [Agent] vorbereiten?"
+
+## Stack
+- NixOS + Cosmic Desktop (Wayland)
+- Rust, libcosmic, iced, wgpu
+- Build: `nix develop --command cargo run --bin 3dnterm`
+- Alias: `3dn`
 
 ---
 

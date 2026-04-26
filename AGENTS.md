@@ -1,3 +1,10 @@
+---
+project: 3DNTerminal
+tags: [rust, cosmic, terminal, agents]
+agent: claude
+type: agents
+---
+
 # 3DNTerminal — AGENTS.md
 # Globale Projektdokumentation für alle AI-Agents
 # (Claude, Kimi, DeepSeek, IronClaw, Goose, pi)

@@ -25,7 +25,13 @@ pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
             let hover = (time * 2.0).sin() * 8.0;
             let mut rect = params.corner_rect;
             rect.y += hover;
-            (rect, -18.0, 0.4)
+            
+            // Top corners tilt positive, bottom corners negative
+            let angle = match params.active_corner {
+                CornerPosition::TopLeft | CornerPosition::TopRight => 18.0,
+                CornerPosition::BottomLeft | CornerPosition::BottomRight => -18.0,
+            };
+            (rect, angle, 0.4)
         }
         AnimationPhase::Expanded => (params.center_rect, 0.0, 1.0),
         AnimationPhase::Expanding | AnimationPhase::Collapsing => {
@@ -56,10 +62,21 @@ pub fn get_quad(params: &HologramParams) -> [Point; 4] {
     let h = rect.height;
     let perspective = (rad.sin() * 40.0).abs();
     
-    let p1 = Point::new(center.x - w/2.0, center.y - h/2.0 + perspective);
-    let p2 = Point::new(center.x + w/2.0, center.y - h/2.0 - perspective);
-    let p3 = Point::new(center.x + w/2.0, center.y + h/2.0 + perspective);
-    let p4 = Point::new(center.x - w/2.0, center.y + h/2.0 - perspective);
+    // Determine if we need to mirror the perspective tilt according to AGENTS.md:
+    // BottomLeft and TopRight are "vertauscht" (mirrored).
+    let is_mirrored = matches!(params.active_corner, CornerPosition::BottomLeft | CornerPosition::TopRight);
+    
+    let (p1_p, p2_p) = if is_mirrored {
+        (-perspective, perspective)
+    } else {
+        (perspective, -perspective)
+    };
+
+    let p1 = Point::new(center.x - w/2.0, center.y - h/2.0 + p1_p);
+    let p2 = Point::new(center.x + w/2.0, center.y - h/2.0 + p2_p);
+    let p3 = Point::new(center.x + w/2.0, center.y + h/2.0 - p2_p);
+    let p4 = Point::new(center.x - w/2.0, center.y + h/2.0 - p1_p);
+
     [p1, p2, p3, p4]
 }
 
@@ -70,9 +87,15 @@ pub fn draw(
 ) {
     // Wenn Hidden: kleines Icon in Ecke zeichnen, sonst nichts
     if matches!(params.phase, AnimationPhase::Hidden) {
+        let (icon_x, icon_y) = match params.active_corner {
+            CornerPosition::BottomRight => (params.corner_rect.x + params.corner_rect.width - 20.0, params.corner_rect.y + params.corner_rect.height - 20.0),
+            CornerPosition::BottomLeft  => (params.corner_rect.x + 4.0,                             params.corner_rect.y + params.corner_rect.height - 20.0),
+            CornerPosition::TopRight    => (params.corner_rect.x + params.corner_rect.width - 20.0, params.corner_rect.y + 4.0),
+            CornerPosition::TopLeft     => (params.corner_rect.x + 4.0,                             params.corner_rect.y + 4.0),
+        };
+        
         frame.fill_rectangle(
-            Point::new(params.corner_rect.x + params.corner_rect.width - 20.0, 
-                       params.corner_rect.y + params.corner_rect.height - 20.0),
+            Point::new(icon_x, icon_y),
             Size::new(16.0, 16.0),
             Color::from_rgba(0.4, 1.0, 0.8, 0.8),
         );
@@ -90,7 +113,6 @@ pub fn draw(
     let rad = angle_y.to_radians();
     let cos_a = rad.cos();
     let w = target_rect.width * cos_a;
-    let h = target_rect.height;
 
     let path = Path::new(|b| {
         b.move_to(p1);
@@ -124,12 +146,16 @@ pub fn draw(
     let line_height = font_size * 1.5;
     
     let margin_x = (w * 0.05).clamp(5.0, 20.0);
-    let margin_y = (h * 0.05).clamp(10.0, 30.0);
+    let margin_y = (target_rect.height * 0.05).clamp(10.0, 30.0);
     
     let flip_alpha = (cos_a * 2.5).clamp(0.0, 1.0);
     let text_alpha = flip_alpha; 
 
     if text_alpha > 0.0 {
+        // Anchor and Side logic
+        let is_left_corner = matches!(params.active_corner, CornerPosition::TopLeft | CornerPosition::BottomLeft);
+        let anchor = if is_left_corner { p1 } else { p2 };
+
         if border_alpha > 0.0 {
             let top_y = p1.y + margin_y + font_size;
             frame.fill_text(cosmic::iced::widget::canvas::Text {
@@ -141,15 +167,17 @@ pub fn draw(
             });
             
             let box_w = 120.0 * (target_rect.width / 1126.0) * cos_a;
+            let box_x = if is_left_corner { p1.x + margin_x } else { p2.x - box_w - margin_x };
+            
             frame.fill_rectangle(
-                Point::new(p2.x - box_w - margin_x, p2.y + margin_y),
+                Point::new(box_x, p1.y + margin_y),
                 Size::new(box_w, font_size * 1.5),
                 Color::from_rgba(0.4, 1.0, 0.8, 0.2 * border_alpha * flip_alpha)
             );
 
             if let Some(controls) = params.window_controls {
                 let btn_size = (target_rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
-                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size, params.active_corner);
+                controls.draw(frame, border_alpha * flip_alpha, anchor, btn_size, params.active_corner);
             }
         }
 
