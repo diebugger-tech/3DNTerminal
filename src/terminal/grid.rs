@@ -1,4 +1,3 @@
-use vte::{Params, Perform};
 use cosmic::iced::Color;
 
 fn color_from_256(id: u8) -> Color {
@@ -30,9 +29,6 @@ fn color_from_256(id: u8) -> Color {
     }
 }
 
-/// Represents a single character cell in the terminal grid.
-/// Contains the character data along with its foreground, background colors, and formatting.
-#[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
     pub char: char,
@@ -46,7 +42,7 @@ impl Default for Cell {
     fn default() -> Self {
         Self {
             char: ' ',
-            fg: Color::from_rgb(0.9, 0.9, 0.9), // White
+            fg: Color::from_rgb(0.9, 0.9, 0.9),
             bg: Color::TRANSPARENT,
             bold: false,
             italic: false,
@@ -55,8 +51,6 @@ impl Default for Cell {
 }
 
 #[derive(Clone, Debug)]
-/// The thread-safe terminal state holding the 2D grid of `Cell`s.
-/// It also manages cursor position, active colors, viewport offset, and scrollback history.
 pub struct TerminalGrid {
     pub cells: Vec<Vec<Cell>>,
     pub cols: usize,
@@ -74,12 +68,11 @@ pub struct TerminalGrid {
 }
 
 impl TerminalGrid {
-    /// Creates a new, empty `TerminalGrid` with the specified dimensions.
     pub fn new(cols: usize, rows: usize) -> Self {
         let default_fg = Color::from_rgb(0.9, 0.9, 0.9);
         let default_bg = Color::TRANSPARENT;
         
-        Self {
+        let mut grid = Self {
             cells: vec![vec![Cell::default(); cols]; rows],
             cols,
             rows,
@@ -93,17 +86,34 @@ impl TerminalGrid {
             max_scrollback: 1000,
             viewport_offset: 0,
             dirty: true,
+        };
+        
+        grid.welcome_message();
+        grid
+    }
+
+    fn welcome_message(&mut self) {
+        let msg = "3DNTerminal - Frontend Mode Active";
+        for (i, c) in msg.chars().enumerate() {
+            if i < self.cols {
+                self.cells[0][i].char = c;
+                self.cells[0][i].fg = Color::from_rgb(0.4, 1.0, 0.8);
+            }
+        }
+        let sub = "Shell backend removed.";
+        for (i, c) in sub.chars().enumerate() {
+            if i < self.cols {
+                self.cells[1][i].char = c;
+                self.cells[1][i].fg = Color::from_rgb(0.6, 0.6, 0.6);
+            }
         }
     }
 
-    /// Resizes the grid dynamically. Existing content is preserved.
     pub fn resize(&mut self, new_cols: usize, new_rows: usize) {
         if new_cols == self.cols && new_rows == self.rows {
             return;
         }
-        
-        let empty_cell = Cell { char: ' ', fg: self.default_fg, bg: self.default_bg, bold: false, italic: false };
-        
+        let empty_cell = Cell::default();
         if new_rows > self.rows {
             for _ in self.rows..new_rows {
                 self.cells.push(vec![empty_cell; new_cols]);
@@ -114,16 +124,11 @@ impl TerminalGrid {
                 self.cursor_y = new_rows.saturating_sub(1);
             }
         }
-        
         for row in self.cells.iter_mut() {
             row.resize(new_cols, empty_cell);
         }
-        
         self.cols = new_cols;
         self.rows = new_rows;
-        if self.cursor_x >= new_cols {
-            self.cursor_x = new_cols.saturating_sub(1);
-        }
         self.dirty = true;
     }
 
@@ -139,215 +144,13 @@ impl TerminalGrid {
         }
     }
 
-    /// Scrolls the viewport up (back in history) by `lines`.
     pub fn scroll_up(&mut self, lines: usize) {
-        let old_offset = self.viewport_offset;
         self.viewport_offset = (self.viewport_offset + lines).min(self.scrollback.len());
-        if old_offset != self.viewport_offset { self.dirty = true; }
+        self.dirty = true;
     }
 
-    /// Scrolls the viewport down (forward in time) by `lines`.
     pub fn scroll_down(&mut self, lines: usize) {
-        let old_offset = self.viewport_offset;
         self.viewport_offset = self.viewport_offset.saturating_sub(lines);
-        if old_offset != self.viewport_offset { self.dirty = true; }
-    }
-
-    fn new_line(&mut self) {
-        if self.cursor_y < self.rows - 1 {
-            self.cursor_y += 1;
-        } else {
-            // Scroll down: push first line to scrollback, add new line at end
-            let old_line = self.cells.remove(0);
-            self.scrollback.push(old_line);
-            if self.scrollback.len() > self.max_scrollback {
-                self.scrollback.remove(0);
-            }
-            self.cells.push(vec![Cell {
-                char: ' ',
-                fg: self.default_fg,
-                bg: self.default_bg,
-                bold: false,
-                italic: false,
-            }; self.cols]);
-        }
         self.dirty = true;
     }
-}
-
-impl Perform for TerminalGrid {
-    fn print(&mut self, c: char) {
-        if self.cursor_x >= self.cols {
-            self.cursor_x = 0;
-            self.new_line();
-        }
-        
-        self.cells[self.cursor_y][self.cursor_x] = Cell {
-            char: c,
-            fg: self.current_fg,
-            bg: self.current_bg,
-            bold: false,
-            italic: false,
-        };
-        self.cursor_x += 1;
-        self.dirty = true;
-    }
-
-    fn execute(&mut self, byte: u8) {
-        match byte {
-            b'\n' | b'\x0B' | b'\x0C' => { self.new_line(); self.dirty = true; }
-            b'\r' => { self.cursor_x = 0; self.dirty = true; }
-            b'\x08' => { // Backspace
-                if self.cursor_x > 0 {
-                    self.cursor_x -= 1;
-                    self.dirty = true;
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn hook(&mut self, _params: &Params, _intermediates: &[u8], _ignore: bool, _action: char) {}
-    fn put(&mut self, _byte: u8) {}
-    fn unhook(&mut self) {}
-    fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
-
-    fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], _ignore: bool, action: char) {
-        self.dirty = true; // Any CSI implies dirty
-        match action {
-            'A' => { // Cursor Up
-                let n = params.iter().next().map_or(1, |x| x[0] as usize).max(1);
-                self.cursor_y = self.cursor_y.saturating_sub(n);
-            }
-            'B' => { // Cursor Down
-                let n = params.iter().next().map_or(1, |x| x[0] as usize).max(1);
-                self.cursor_y = (self.cursor_y + n).min(self.rows - 1);
-            }
-            'C' => { // Cursor Forward
-                let n = params.iter().next().map_or(1, |x| x[0] as usize).max(1);
-                self.cursor_x = (self.cursor_x + n).min(self.cols - 1);
-            }
-            'D' => { // Cursor Backward
-                let n = params.iter().next().map_or(1, |x| x[0] as usize).max(1);
-                self.cursor_x = self.cursor_x.saturating_sub(n);
-            }
-            'H' | 'f' => { // Cursor Position
-                let mut it = params.iter();
-                let y = it.next().map_or(1, |x| x[0] as usize).max(1).saturating_sub(1);
-                let x = it.next().map_or(1, |x| x[0] as usize).max(1).saturating_sub(1);
-                self.cursor_y = y.min(self.rows - 1);
-                self.cursor_x = x.min(self.cols - 1);
-            }
-            'J' => { // Erase in Display
-                let mode = params.iter().next().map_or(0, |x| x[0]);
-                match mode {
-                    0 => { // Below
-                        for i in self.cursor_x..self.cols {
-                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                        }
-                        for r in (self.cursor_y + 1)..self.rows {
-                            for c in 0..self.cols {
-                                self.cells[r][c] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                            }
-                        }
-                    }
-                    2 => { // All
-                        for r in 0..self.rows {
-                            for c in 0..self.cols {
-                                self.cells[r][c] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                            }
-                        }
-                        self.cursor_x = 0;
-                        self.cursor_y = 0;
-                    }
-                    _ => {}
-                }
-            }
-            'K' => { // Erase in Line
-                let mode = params.iter().next().map_or(0, |x| x[0]);
-                match mode {
-                    0 => { // Right
-                        for i in self.cursor_x..self.cols {
-                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                        }
-                    }
-                    1 => { // Left
-                        for i in 0..=self.cursor_x {
-                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                        }
-                    }
-                    2 => { // All
-                        for i in 0..self.cols {
-                            self.cells[self.cursor_y][i] = Cell { char: ' ', fg: self.current_fg, bg: self.current_bg, ..Cell::default() };
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            'm' => { // SGR (Select Graphic Rendition)
-                if params.is_empty() {
-                    self.current_fg = self.default_fg;
-                    self.current_bg = self.default_bg;
-                    return;
-                }
-                
-                let mut it = params.iter().flat_map(|p| p.iter().copied());
-                while let Some(param) = it.next() {
-                    match param {
-                        0 => {
-                            self.current_fg = self.default_fg;
-                            self.current_bg = self.default_bg;
-                        }
-                        38 => {
-                            if let Some(format) = it.next() {
-                                if format == 2 {
-                                    let r = it.next().unwrap_or(0);
-                                    let g = it.next().unwrap_or(0);
-                                    let b = it.next().unwrap_or(0);
-                                    self.current_fg = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                                } else if format == 5 {
-                                    let id = it.next().unwrap_or(0);
-                                    self.current_fg = color_from_256(id as u8);
-                                }
-                            }
-                        }
-                        48 => {
-                            if let Some(format) = it.next() {
-                                if format == 2 {
-                                    let r = it.next().unwrap_or(0);
-                                    let g = it.next().unwrap_or(0);
-                                    let b = it.next().unwrap_or(0);
-                                    self.current_bg = Color::from_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                                } else if format == 5 {
-                                    let id = it.next().unwrap_or(0);
-                                    self.current_bg = color_from_256(id as u8);
-                                }
-                            }
-                        }
-                        31 => self.current_fg = Color::from_rgb(1.0, 0.3, 0.3),
-                        32 => self.current_fg = Color::from_rgb(0.3, 1.0, 0.3),
-                        33 => self.current_fg = Color::from_rgb(1.0, 1.0, 0.3),
-                        34 => self.current_fg = Color::from_rgb(0.3, 0.3, 1.0),
-                        36 => self.current_fg = Color::from_rgb(0.3, 1.0, 1.0),
-                        37 => self.current_fg = self.default_fg,
-                        39 => self.current_fg = self.default_fg,
-                        
-                        41 => self.current_bg = Color::from_rgb(1.0, 0.3, 0.3),
-                        42 => self.current_bg = Color::from_rgb(0.3, 1.0, 0.3),
-                        43 => self.current_bg = Color::from_rgb(1.0, 1.0, 0.3),
-                        44 => self.current_bg = Color::from_rgb(0.3, 0.3, 1.0),
-                        46 => self.current_bg = Color::from_rgb(0.3, 1.0, 1.0),
-                        47 => self.current_bg = self.default_fg,
-                        49 => self.current_bg = self.default_bg,
-                        
-                        90 => self.current_fg = Color::from_rgb(0.5, 0.5, 0.5), // Gray
-                        _ => {}
-                    }
-                }
-                self.dirty = true;
-            }
-            _ => {}
-        }
-    }
-    fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
 }
