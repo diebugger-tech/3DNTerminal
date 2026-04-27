@@ -37,6 +37,43 @@ cargo run --bin wgpu
 
 ---
 
+## 🛡️ STABILITY MODE (AKTIV)
+- **Status**: 3D-Hologramm-Effekt vorerst ausgelagert / deaktiviert.
+- **Ziel**: 100% zuverlässige Button-Interaktion im 2D-Raum.
+- **Wiederherstellung**: Sobald die 2D-Basis perfekt sitzt, wird der 3D-Effekt als Option reaktiviert.
+
+---
+
+## 🎮 UI-LOGIK (PHASE 2)
+
+### 1. Die Pfeile (↖ ↗ ↙ ↘)
+- **Funktion**: Schicken das Terminal sofort in die jeweilige Ecke (`Collapsed`-Modus).
+- **Corner-Jumping**: Man kann direkt von Ecke zu Ecke springen.
+- **Toggle**: Klick auf die *aktuelle* Ecke schickt das Terminal zurück in die Mitte (`Expanded`).
+
+### 2. Minimieren (−)
+- **Aktion**: Wechselt in den internen `Hidden`-Zustand.
+- **Visual**: Nur ein kleines cyanfarbenes Quadrat in der aktiven Ecke bleibt sichtbar.
+- **Restore**: Klick auf dieses Quadrat klappt das Terminal wieder auf.
+
+### 3. Maximieren (□)
+- **Aktion**: Toggle zwischen Mitte (`Expanded`) und der letzten Ecke (`Collapsed`).
+
+### 4. Schließen (×)
+- **Aktion**: Beendet die Anwendung vollständig (`std::process::exit(0)`).
+
+---
+
+## 🛡️ STRENGES PROTOKOLL (MANDATORY)
+
+1. **Diff-First**: Jede Code-Änderung MUSS zuerst als Text-Diff (Markdown) im Chat vorgeschlagen werden.
+2. **Keine autonomen Änderungen**: Tools wie `replace_file_content` dürfen ERST gerufen werden, wenn der User den Diff explizit bestätigt hat.
+3. **Erklären vor Handeln**: Erst das "Was" und "Warum" im Chat klären, dann das "Wie" als Diff zeigen.
+4. **Backup-Pflicht**: Vor jeder Dateiänderung: `cp <datei> <datei>.bak`.
+5. **STOP after edit**: Nach einer Änderung sofort anhalten und Feedback abwarten.
+
+---
+
 ## ⚠️ CORNER-FLIP — NICHT ÜBERSCHREIBEN!
 
 Das Fenster springt per 4 Buttons in jede Ecke. Das ist ein Kern-Feature.
