@@ -6,7 +6,6 @@ pub enum ButtonAction {
     Minimize,
     Maximize,
     Close,
-    RestoreLast,
     SetCorner(CornerPosition),
 }
 
@@ -18,29 +17,27 @@ impl WindowControls {
     }
 
     // Button-Positionen: rechts-verankert an anchor (p2), von rechts nach links:
-    // ×  □  −  [sep]  ↩  [sep]  ↘  ↙  ↗  ↖
-    fn button_positions(anchor: Point, btn_size: f32) -> [(f32, &'static str, ButtonAction); 8] {
-        let gap = 12.0; // Fester, größerer Abstand
-        let sep = 24.0; // Deutlicher Trenner
+    // ×  □  −  [sep]  ↘  ↙  ↗  ↖
+    fn button_positions(anchor: Point, btn_size: f32) -> [(f32, &'static str, ButtonAction); 7] {
+        let gap = btn_size * 0.3;
+        let sep = btn_size * 0.8; // extra Abstand zwischen Corner-Buttons und Window-Controls
 
         let close_x    = anchor.x - btn_size;
         let max_x      = anchor.x - btn_size * 2.0 - gap;
         let min_x      = anchor.x - btn_size * 3.0 - gap * 2.0;
-        let restore_x  = anchor.x - btn_size * 4.0 - gap * 2.0 - sep;
-        let br_x       = anchor.x - btn_size * 5.0 - gap * 2.0 - sep * 2.0;
-        let bl_x       = anchor.x - btn_size * 6.0 - gap * 3.0 - sep * 2.0;
-        let tr_x       = anchor.x - btn_size * 7.0 - gap * 4.0 - sep * 2.0;
-        let tl_x       = anchor.x - btn_size * 8.0 - gap * 5.0 - sep * 2.0;
+        let br_x       = anchor.x - btn_size * 4.0 - gap * 2.0 - sep;
+        let bl_x       = anchor.x - btn_size * 5.0 - gap * 3.0 - sep;
+        let tr_x       = anchor.x - btn_size * 6.0 - gap * 4.0 - sep;
+        let tl_x       = anchor.x - btn_size * 7.0 - gap * 5.0 - sep;
 
         [
-            (close_x,   "×",  ButtonAction::Close),
-            (max_x,     "□",  ButtonAction::Maximize),
-            (min_x,     "−",  ButtonAction::Minimize),
-            (restore_x, "↩",  ButtonAction::RestoreLast),
-            (br_x,      "↘",  ButtonAction::SetCorner(CornerPosition::BottomRight)),
-            (bl_x,      "↙",  ButtonAction::SetCorner(CornerPosition::BottomLeft)),
-            (tr_x,      "↗",  ButtonAction::SetCorner(CornerPosition::TopRight)),
-            (tl_x,      "↖",  ButtonAction::SetCorner(CornerPosition::TopLeft)),
+            (close_x, "×",  ButtonAction::Close),
+            (max_x,   "□",  ButtonAction::Maximize),
+            (min_x,   "−",  ButtonAction::Minimize),
+            (br_x,    "↘",  ButtonAction::SetCorner(CornerPosition::BottomRight)),
+            (bl_x,    "↙",  ButtonAction::SetCorner(CornerPosition::BottomLeft)),
+            (tr_x,    "↗",  ButtonAction::SetCorner(CornerPosition::TopRight)),
+            (tl_x,    "↖",  ButtonAction::SetCorner(CornerPosition::TopLeft)),
         ]
     }
 
@@ -54,9 +51,15 @@ impl WindowControls {
         for (bx, icon, action) in Self::button_positions(anchor, btn_size) {
             let path = Path::rectangle(Point::new(bx, by), Size::new(btn_size, btn_size));
 
+            // Aktive Ecke: gefüllter Hintergrund
+            let is_active_corner = matches!(action, ButtonAction::SetCorner(pos) if pos == active_corner);
+            if is_active_corner {
+                frame.fill(&path, cyan_fill);
+            }
+
             frame.stroke(&path, Stroke::default()
                 .with_color(cyan)
-                .with_width(1.2));
+                .with_width(1.0));
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: icon.to_string(),
@@ -79,9 +82,8 @@ impl WindowControls {
         );
 
         for (bx, _, action) in Self::button_positions(anchor, btn_size) {
-            let margin = 2.0; // Minimaler Puffer, um Überlappungen zu vermeiden
-            let hit = click.x >= bx - margin && click.x <= bx + btn_size + margin
-                   && click.y >= by - margin && click.y <= by + btn_size + margin;
+            let hit = click.x >= bx && click.x <= bx + btn_size
+                   && click.y >= by && click.y <= by + btn_size;
 
             tracing::debug!(
                 "  {:?}: rect ({:.1},{:.1})→({:.1},{:.1}) hit={}",

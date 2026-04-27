@@ -10,8 +10,10 @@ pub enum AnimationPhase {
     Hidden,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum CornerPosition {
+    #[default]
+    Free,
     TopLeft,
     TopRight,
     BottomLeft,
@@ -24,6 +26,7 @@ impl CornerPosition {
         let h = 250.0_f32;
         let m = 20.0_f32;
         let (x, y) = match self {
+            CornerPosition::Free        => (window_width * 0.06, window_height * 0.09),
             CornerPosition::TopLeft     => (m, m),
             CornerPosition::TopRight    => (window_width - w - m, m),
             CornerPosition::BottomLeft  => (m, window_height - h - m),
@@ -54,8 +57,8 @@ impl AppState {
                 Size::new(400.0, 250.0)
             ),
             center_rect: Rectangle::new(
-                Point::new(width * 0.06, height * 0.09),
-                Size::new(width * 0.88, height * 0.82)
+                Point::ORIGIN,
+                Size::new(width, height)
             ),
         }
     }
@@ -66,8 +69,8 @@ impl AppState {
             Size::new(400.0, 250.0)
         );
         self.center_rect = Rectangle::new(
-            Point::new(width * 0.06, height * 0.09),
-            Size::new(width * 0.88, height * 0.82)
+            Point::ORIGIN,
+            Size::new(width, height)
         );
     }
 }

@@ -48,30 +48,18 @@ pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
 }
 
 pub fn get_quad(params: &HologramParams) -> [Point; 4] {
-    /* 
-       DO NOT DELETE - 3D HOLOGRAM LOGIC (Temporarily disabled for button stability)
-       
-       let (rect, angle_y, _) = calculate_3d_geometry(params);
-       let center = rect.center();
-       let rad = angle_y.to_radians();
-       let cos_a = rad.cos();
-       let w = rect.width * cos_a;
-       let h = rect.height;
-       let perspective = (rad.sin() * 40.0).abs();
-       
-       let p1 = Point::new(center.x - w/2.0, center.y - h/2.0 + perspective);
-       let p2 = Point::new(center.x + w/2.0, center.y - h/2.0 - perspective);
-       let p3 = Point::new(center.x + w/2.0, center.y + h/2.0 + perspective);
-       let p4 = Point::new(center.x - w/2.0, center.y + h/2.0 - perspective);
-       [p1, p2, p3, p4]
-    */
-
-    // Stability Mode: Simple 2D Rect
-    let (rect, _, _) = calculate_3d_geometry(params);
-    let p1 = Point::new(rect.x, rect.y);
-    let p2 = Point::new(rect.x + rect.width, rect.y);
-    let p3 = Point::new(rect.x + rect.width, rect.y + rect.height);
-    let p4 = Point::new(rect.x, rect.y + rect.height);
+    let (rect, angle_y, _) = calculate_3d_geometry(params);
+    let center = rect.center();
+    let rad = angle_y.to_radians();
+    let cos_a = rad.cos();
+    let w = rect.width * cos_a;
+    let h = rect.height;
+    let perspective = (rad.sin() * 40.0).abs();
+    
+    let p1 = Point::new(center.x - w/2.0, center.y - h/2.0 + perspective);
+    let p2 = Point::new(center.x + w/2.0, center.y - h/2.0 - perspective);
+    let p3 = Point::new(center.x + w/2.0, center.y + h/2.0 + perspective);
+    let p4 = Point::new(center.x - w/2.0, center.y + h/2.0 - perspective);
     [p1, p2, p3, p4]
 }
 
@@ -82,18 +70,10 @@ pub fn draw(
 ) {
     // Wenn Hidden: kleines Icon in Ecke zeichnen, sonst nichts
     if matches!(params.phase, AnimationPhase::Hidden) {
-        let size = 16.0;
-        let pos = match params.active_corner {
-            CornerPosition::TopLeft     => Point::new(params.corner_rect.x + 8.0, params.corner_rect.y + 8.0),
-            CornerPosition::TopRight    => Point::new(params.corner_rect.x + params.corner_rect.width - size - 8.0, params.corner_rect.y + 8.0),
-            CornerPosition::BottomLeft  => Point::new(params.corner_rect.x + 8.0, params.corner_rect.y + params.corner_rect.height - size - 8.0),
-            CornerPosition::BottomRight => Point::new(params.corner_rect.x + params.corner_rect.width - size - 8.0, params.corner_rect.y + params.corner_rect.height - size - 8.0),
-            CornerPosition::Free        => Point::new(params.corner_rect.x + params.corner_rect.width/2.0 - size/2.0, params.corner_rect.y + params.corner_rect.height - size - 8.0),
-        };
-        
         frame.fill_rectangle(
-            pos,
-            Size::new(size, size),
+            Point::new(params.corner_rect.x + params.corner_rect.width - 20.0, 
+                       params.corner_rect.y + params.corner_rect.height - 20.0),
+            Size::new(16.0, 16.0),
             Color::from_rgba(0.4, 1.0, 0.8, 0.8),
         );
         return;
@@ -112,7 +92,13 @@ pub fn draw(
     let w = target_rect.width * cos_a;
     let h = target_rect.height;
 
-    let path = Path::rounded_rectangle(target_rect.position(), target_rect.size(), 4.0.into());
+    let path = Path::new(|b| {
+        b.move_to(p1);
+        b.line_to(p2);
+        b.line_to(p3);
+        b.line_to(p4);
+        b.close();
+    });
 
     let bg_alpha = 0.8 * alpha;
     let border_alpha = alpha;
