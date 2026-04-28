@@ -37,36 +37,14 @@ cargo run --bin wgpu
 
 ---
 
-## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: 2D-Basis stabilisiert. Hit-Testing auf Canvas-lokale Koordinaten umgestellt.
-- **Phase 3**: Integration modularer Widgets (Hamburger-Menü, Tabs) gestartet.
+## 🛡️ STABILITY MODE (AKTIV)
+- **Status**: 3D-Hologramm-Effekt vorerst ausgelagert / deaktiviert.
+- **Ziel**: 100% zuverlässige Button-Interaktion im 2D-Raum.
+- **Wiederherstellung**: Sobald die 2D-Basis perfekt sitzt, wird der 3D-Effekt als Option reaktiviert.
 
 ---
 
-## ✅ BEHOBENE BUGS (PHASE 3)
-
-### Bug 3: Koordinaten-Mismatch im Expanded-Modus
-- **Problem**: Maus-Position in `update` entsprach nicht den gezeichneten Koordinaten in `draw`.
-- **Fix**: Synchronisation via `self.cursor_pos`, die im Canvas-Draw-Call lokalisiert wird.
-
-### Bug 4: Header-Überlappung
-- **Fix**: Titel-Text um 85px nach rechts verschoben, um Platz für ☰ und + zu schaffen.
-
----
-
-## 🎮 UI-LOGIK (PHASE 3 - IN ARBEIT)
-
-### 1. Hamburger-Menü (☰)
-- **Design**: Blade Runner (Amber/Glow/Glass).
-- **Features**: Modulare Skill-Liste, A11y-Physics Toggle (funktioniert).
-- **Hit-Testing**: Zeilenbasierte Erkennung (60px Slots).
-
-### 2. Tabs (+)
-- **Status**: Hit-Test aktiv, Logik-Implementation folgt (Multi-Session).
-
----
-
-## 🎮 UI-LOGIK (PHASE 2 - COMPLETED)
+## 🎮 UI-LOGIK (PHASE 2)
 
 ### 1. Die Pfeile (↖ ↗ ↙ ↘)
 - **Funktion**: Schicken das Terminal sofort in die jeweilige Ecke (`Collapsed`-Modus).
@@ -74,9 +52,9 @@ cargo run --bin wgpu
 - **Toggle**: Klick auf die *aktuelle* Ecke schickt das Terminal zurück in die Mitte (`Expanded`).
 
 ### 2. Minimieren (−)
-- **Aktion**: Nutzt `core.minimize(None)` für echtes OS-Docking.
-- **Visual**: Fenster verschwindet in das Cosmic/Wayland Dock.
-- **Restore**: Über das System-Dock wiederherstellbar.
+- **Aktion**: Wechselt in den internen `Hidden`-Zustand.
+- **Visual**: Nur ein kleines cyanfarbenes Quadrat in der aktiven Ecke bleibt sichtbar.
+- **Restore**: Klick auf dieses Quadrat klappt das Terminal wieder auf.
 
 ### 3. Maximieren (□)
 - **Aktion**: Toggle zwischen Mitte (`Expanded`) und der letzten Ecke (`Collapsed`).
@@ -199,14 +177,35 @@ match active_corner {
 
 ---
 
-## ✅ BEHOBENE BUGS (PHASE 2)
+## Bekannte Bugs
 
-### Bug 1: Wayland schluckt Events / Koordinaten-Offset
-- **Ursache**: Globale Wayland-Events vs. lokale Iced-Bounds + 65px Hardcoded-Offset.
-- **Fix**: Komplette Migration auf `iced::canvas::Program::update`. Nutzung von `cursor.position_in(bounds)` für native, relative Koordinaten.
+### Bug 1: Wayland schluckt ButtonPressed
+**Ursache:** Compositor konsumiert `ButtonPressed` für Hit-Testing.
+**Fix:** Auf `ButtonReleased` reagieren statt `ButtonPressed`:
+```rust
+mouse::Event::ButtonReleased(mouse::Button::Left) => { ... }
+```
 
-### Bug 2: Klick-Swallowing (Multi-Click-Problem)
-- **Fix**: Ausführung von Button-Aktionen direkt bei `CanvasButtonPressed` statt erst bei `Released`. Verhindert das "Abrutschen" des Cursors während der Animation.
+### Bug 2: Doppelte Dekorationen
+**Fix:**
+```rust
+Settings::default()
+    .transparent(true)
+    .client_decorations(false)
+// NICHT: .decorations(false) — kompiliert nicht in libcosmic
+```
+
+### Bug 3: Task/Action Wrapper
+**Fix:**
+```rust
+// FALSCH:
+Task::perform(async move { msg }, |m| m)
+// RICHTIG:
+Task::perform(async move { msg }, |m| cosmic::Action::App(m))
+```
+
+### Bug 4: Durchklicken auf transparente Bereiche
+**Fix:** Hintergrund nie komplett transparent — mindestens 1% Opacity.
 
 ---
 
