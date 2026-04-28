@@ -145,7 +145,7 @@ pub fn draw(
     frame.fill_text(cosmic::iced::widget::canvas::Text {
         content: "3DNTerminal".to_string(),
         position: Point::new(header_rect.x + 35.0, header_rect.y + 12.0),
-        color: apply_color_filter(Style::NEON_CYAN, filter),
+        color: neon_color,
         size: Pixels(Style::HEADER_FONT_SIZE),
         ..Default::default()
     });
@@ -185,7 +185,7 @@ pub fn draw(
                 frame.fill_rectangle(
                     Point::new(cursor_x, cursor_y - 12.0),
                     Size::new(Style::CHAR_WIDTH, 14.0),
-                    Color::from_rgba(Style::NEON_CYAN.r, Style::NEON_CYAN.g, Style::NEON_CYAN.b, 0.8 * alpha)
+                    Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.8 * alpha)
                 );
             }
         }
@@ -235,17 +235,37 @@ pub fn draw(
             crate::ui::overlay::OverlayMode::Physics => "physics",
             crate::ui::overlay::OverlayMode::Themes => "themes",
             crate::ui::overlay::OverlayMode::A11y => "a11y",
+            crate::ui::overlay::OverlayMode::Security => "security",
+            crate::ui::overlay::OverlayMode::Search => "search",
+            crate::ui::overlay::OverlayMode::Shortcuts => "shortcuts",
             _ => "",
         };
 
+        let overlay_w = 400.0;
+        let overlay_h = 350.0;
+        let overlay_rect = Rectangle::new(
+            Point::new(rect.x + (rect.width - overlay_w) / 2.0, rect.y + (rect.height - overlay_h) / 2.0),
+            Size::new(overlay_w, overlay_h)
+        );
+
         if let Some(skill) = params.skills.iter().find(|s| s.id() == overlay_id) {
-            let overlay_w = 400.0;
-            let overlay_h = 350.0;
-            let overlay_rect = Rectangle::new(
-                Point::new(rect.x + (rect.width - overlay_w) / 2.0, rect.y + (rect.height - overlay_h) / 2.0),
-                Size::new(overlay_w, overlay_h)
-            );
             skill.draw_overlay(frame, overlay_rect, alpha, params);
+        } else {
+            // Default drawing for non-skill overlays like Search/Shortcuts
+            frame.fill_text(cosmic::iced::widget::canvas::Text {
+                content: params.active_overlay.label().to_string(),
+                position: Point::new(overlay_rect.x + 20.0, overlay_rect.y + 40.0),
+                color: neon_color,
+                size: Pixels(24.0),
+                ..Default::default()
+            });
+            frame.fill_text(cosmic::iced::widget::canvas::Text {
+                content: "Module integration in progress...".to_string(),
+                position: Point::new(overlay_rect.x + 20.0, overlay_rect.y + 80.0),
+                color: Color::from_rgba(0.7, 0.7, 0.7, alpha),
+                size: Pixels(14.0),
+                ..Default::default()
+            });
         }
     }
 
