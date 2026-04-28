@@ -54,6 +54,7 @@ pub struct App {
     last_corner: CornerPosition,
     is_dragging: bool,
     is_resizing: bool,
+    is_corner_resizing: bool, // Direct corner drag
     drag_start_pos: Point,
     hovered_action: Option<ui::window_controls::ButtonAction>,
     active_button: Option<ui::window_controls::ButtonAction>,
@@ -221,6 +222,7 @@ impl Application for App {
             last_corner: CornerPosition::BottomRight,
             is_dragging: false,
             is_resizing: false,
+            is_corner_resizing: false,
             drag_start_pos: Point::ORIGIN,
             hovered_action: None,
             active_button: None,
@@ -473,7 +475,16 @@ impl Application for App {
                 }
                 
                 let effective_pos = self.cursor_pos;
-                if self.is_dragging {
+                if self.is_corner_resizing {
+                    let (rect, _) = ui::two_d::calculate_geometry(&self.params());
+                    let new_w = (effective_pos.x - rect.x).max(300.0);
+                    let new_h = (effective_pos.y - rect.y).max(200.0);
+                    self.center_rect.width = new_w;
+                    self.center_rect.height = new_h;
+                    self.config.saved_width = new_w;
+                    self.config.saved_height = new_h;
+                    self.cache.clear();
+                } else if self.is_dragging {
                     let delta_x = effective_pos.x - self.drag_start_pos.x;
                     let delta_y = effective_pos.y - self.drag_start_pos.y;
                     self.center_rect.x += delta_x;
@@ -496,6 +507,7 @@ impl Application for App {
             Message::CanvasButtonPressed(btn, _pos) => {
                 if btn == mouse::Button::Left {
                     let effective_pos = self.cursor_pos;
+                    let (rect, _) = ui::two_d::calculate_geometry(&self.params());
                     let on_button = self.current_hit_test(effective_pos);
                     let on_menu = self.hamburger_menu.is_open && effective_pos.x >= self.center_rect.x && effective_pos.x <= self.center_rect.x + 280.0;
                     
@@ -504,6 +516,20 @@ impl Application for App {
 
                     if on_button.is_some() || on_menu || self.active_overlay != OverlayMode::None {
                         return Task::none();
+                    }
+
+                    // Check for Corner-Grip (Bottom Right)
+                    if self.phase == AnimationPhase::Expanded {
+                        let grip_size = 30.0;
+                        let grip_rect = Rectangle::new(
+                            Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
+                            Size::new(grip_size, grip_size)
+                        );
+                        if grip_rect.contains(effective_pos) {
+                            self.is_corner_resizing = true;
+                            self.drag_start_pos = effective_pos;
+                            return Task::none();
+                        }
                     }
 
                     if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
@@ -591,6 +617,12 @@ impl Application for App {
                     let (rect, _) = ui::two_d::calculate_geometry(&self.params());
                     let left_anchor = Point::new(rect.x, rect.y);
                     
+                    if self.is_corner_resizing {
+                        self.is_corner_resizing = false;
+                        let _ = self.config.save("config.toml");
+                        return Task::none();
+                    }
+
                     if self.is_dragging {
                         self.is_dragging = false;
                         return Task::none();

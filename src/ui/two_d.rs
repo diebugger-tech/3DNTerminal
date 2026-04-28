@@ -159,6 +159,17 @@ pub fn draw(
         controls.draw(frame, alpha, left_anchor, right_anchor, Style::BUTTON_SIZE, params.cursor_pos);
     }
     
+    // Resize Grip (Bottom Right) - Nr. 4 Extension
+    if params.phase == crate::app::state::AnimationPhase::Expanded && alpha > 0.5 {
+        let grip_color = apply_color_filter(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.4 * alpha), filter);
+        for i in 0..3 {
+            let offset = i as f32 * 5.0;
+            let p1 = Point::new(rect.x + rect.width - 5.0 - offset, rect.y + rect.height - 5.0);
+            let p2 = Point::new(rect.x + rect.width - 5.0, rect.y + rect.height - 5.0 - offset);
+            frame.stroke(&Path::line(p1, p2), Stroke::default().with_color(grip_color).with_width(1.2));
+        }
+    }
+    
     // BladeRunner Polish: Rainy Night effect (Nr. 3)
     if params.config.theme == crate::config::TerminalTheme::BladeRunner && alpha > 0.1 {
         let time = params.start_time.elapsed().as_secs_f32();
