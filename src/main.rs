@@ -167,10 +167,14 @@ impl canvas::Program<Message, Theme> for App {
             
             // 1. Check for Resize Edges & Corners
             let margin = 10.0;
-            let on_l = pos.x >= rect.x - margin && pos.x <= rect.x + margin;
-            let on_r = pos.x >= rect.x + rect.width - margin && pos.x <= rect.x + rect.width + margin;
-            let on_t = pos.y >= rect.y - margin && pos.y <= rect.y + margin;
-            let on_b = pos.y >= rect.y + rect.height - margin && pos.y <= rect.y + rect.height + margin;
+            let on_l = pos.x >= rect.x - margin && pos.x <= rect.x + margin
+                    && pos.y >= rect.y - margin && pos.y <= rect.y + rect.height + margin;
+            let on_r = pos.x >= rect.x + rect.width - margin && pos.x <= rect.x + rect.width + margin
+                    && pos.y >= rect.y - margin && pos.y <= rect.y + rect.height + margin;
+            let on_t = pos.y >= rect.y - margin && pos.y <= rect.y + margin
+                    && pos.x >= rect.x - margin && pos.x <= rect.x + rect.width + margin;
+            let on_b = pos.y >= rect.y + rect.height - margin && pos.y <= rect.y + rect.height + margin
+                    && pos.x >= rect.x - margin && pos.x <= rect.x + rect.width + margin;
 
             if on_l || on_r || on_t || on_b {
                 return mouse::Interaction::Pointer; // Visual indicator for resize zone
@@ -599,10 +603,14 @@ impl Application for App {
 
                     // Check for Resize Edges & Corners (All 4 sides)
                     let m = 12.0;
-                    let on_l = effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + m;
-                    let on_r = effective_pos.x >= rect.x + rect.width - m && effective_pos.x <= rect.x + rect.width + m;
-                    let on_t = effective_pos.y >= rect.y - m && effective_pos.y <= rect.y + m;
-                    let on_b = effective_pos.y >= rect.y + rect.height - m && effective_pos.y <= rect.y + rect.height + m;
+                    let on_l = effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + m
+                            && effective_pos.y >= rect.y - m && effective_pos.y <= rect.y + rect.height + m;
+                    let on_r = effective_pos.x >= rect.x + rect.width - m && effective_pos.x <= rect.x + rect.width + m
+                            && effective_pos.y >= rect.y - m && effective_pos.y <= rect.y + rect.height + m;
+                    let on_t = effective_pos.y >= rect.y - m && effective_pos.y <= rect.y + m
+                            && effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + rect.width + m;
+                    let on_b = effective_pos.y >= rect.y + rect.height - m && effective_pos.y <= rect.y + rect.height + m
+                            && effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + rect.width + m;
 
                     if on_l || on_r || on_t || on_b {
                         if self.active_corner != CornerPosition::Free {
@@ -627,18 +635,20 @@ impl Application for App {
                         return Task::none();
                     }
 
-                    // Dragging initialization
-                    self.is_dragging = true;
-                    self.drag_start_pos = effective_pos;
-                    
-                    // Unpin from corner if dragging starts
-                    if self.active_corner != CornerPosition::Free {
-                        self.active_corner = CornerPosition::Free;
-                        self.phase = AnimationPhase::Expanded;
-                        self.progress = 1.0;
-                        // Important: Snap center_rect to the current animated rect position
-                        // so it doesn't jump to the middle of the screen
-                        self.center_rect = rect;
+                    // Dragging initialization - ONLY if inside rect
+                    if rect.contains(effective_pos) {
+                        self.is_dragging = true;
+                        self.drag_start_pos = effective_pos;
+                        
+                        // Unpin from corner if dragging starts
+                        if self.active_corner != CornerPosition::Free {
+                            self.active_corner = CornerPosition::Free;
+                            self.phase = AnimationPhase::Expanded;
+                            self.progress = 1.0;
+                            // Important: Snap center_rect to the current animated rect position
+                            self.center_rect = rect;
+                        }
+                        self.cache.clear();
                     }
                 }
                 return Task::none();
