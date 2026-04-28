@@ -11,9 +11,10 @@
 - [x] **Draggable Area**: Fix für Window-Dragging mit sauberen Hit-Test-Grenzen.
 
 ## 🎨 Visuals & UI
+- [x] **Classic Design Restore**: Rückkehr zu Emojis und puristischem Layout.
+- [x] **Clean Project**: Alle Hintergrund-Effekte (Regen, Sterne etc.) wurden entfernt.
 - [ ] **Glow Toggle**: Dynamisches Ein/Ausschalten des Neon-Glows via Menü.
-- [ ] **UI-Theming (Frames & Buttons)**: Themes auf Rahmen und Bedienelemente anwenden (statt Hintergrund).
-- [ ] **Holographic Glassmorphism**: Transparente Menüs und schwebende UI-Elemente.
+- [ ] **Classic Themes**: Weitere schlichte Farbvarianten (Amber, White, Green) ohne Effekte.
 
 ## 🚀 Performance & Backend
 - [ ] **Dirty Flag**: Neuzeichnen nur bei Terminal-Output triggern.

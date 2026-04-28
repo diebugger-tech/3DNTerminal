@@ -783,16 +783,36 @@ impl Application for App {
                         }
                     }
 
-                    // 4. Overlay Close Logic (Click outside)
+                    // 4. Overlay Handling (Skills)
                     if self.active_overlay != OverlayMode::None {
-                        let settings_w = 400.0;
-                        let settings_h = 350.0;
+                        let settings_w = 550.0;
+                        let settings_h = 450.0;
                         let settings_rect = Rectangle {
                             x: rect.x + (rect.width - settings_w) / 2.0,
                             y: rect.y + (rect.height - settings_h) / 2.0,
                             width: settings_w,
                             height: settings_h,
                         };
+
+                        let skill_id = match self.active_overlay {
+                            OverlayMode::Themes => "themes",
+                            OverlayMode::Settings => "settings",
+                            OverlayMode::Physics => "physics",
+                            OverlayMode::A11y => "a11y",
+                            OverlayMode::Security => "security",
+                            _ => "",
+                        };
+
+                        if !skill_id.is_empty() {
+                            if let Some(skill) = self.skills.iter().find(|s| s.id() == skill_id) {
+                                if skill.on_click(effective_pos, settings_rect, &mut self.config) {
+                                    self.cache.clear();
+                                    return Task::none();
+                                }
+                            }
+                        }
+
+                        // Close if clicked outside
                         if !settings_rect.contains(effective_pos) {
                             self.active_overlay = OverlayMode::None;
                             self.cache.clear();

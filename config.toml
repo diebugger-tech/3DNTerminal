@@ -4,6 +4,7 @@ font_size = 14.0
 flip_key_name = "F12"
 neon_color_rgba = [0.4000000059604645, 1.0, 0.800000011920929, 1.0]
 theme = "NeonCyber"
+power_user_mode = false
 glow_active = true
 
 [physics]
@@ -15,3 +16,12 @@ reduce_motion = false
 tremor_damping = 0.0
 color_filter = "None"
 reduce_motion = 0.0
+
+[visuals]
+enabled = true
+rain_intensity = 0.0
+star_density = 0.0
+scanline_opacity = 0.0
+grid_opacity = 0.0
+glow_intensity = 1.0
+shell_alpha = 0.949999988079071
