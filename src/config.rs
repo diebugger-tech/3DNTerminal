@@ -17,22 +17,16 @@ pub struct PhysicsConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct VisualsConfig {
     pub enabled: bool,
-    pub rain_intensity: f32,
-    pub star_density: f32,
-    pub scanline_opacity: f32,
-    pub grid_opacity: f32,
     pub glow_intensity: f32,
+    pub shell_alpha: f32,
 }
 
 impl Default for VisualsConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            rain_intensity: 0.0,
-            star_density: 0.0,
-            scanline_opacity: 0.0,
-            grid_opacity: 0.0,
             glow_intensity: 1.0,
+            shell_alpha: 0.95,
         }
     }
 }
@@ -75,6 +69,7 @@ impl Default for A11yConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum TerminalTheme {
     #[default]
+    Classic,
     NeonCyber,
     AppleGlass,
     DeepSpace,
@@ -97,11 +92,13 @@ pub struct Config {
     pub glow_active: bool,
     pub saved_width: f32,
     pub saved_height: f32,
+    pub theme_intensities: [f32; 6],
 }
 
 impl TerminalTheme {
     pub fn color(&self) -> Color {
         match self {
+            Self::Classic => Color::from_rgba(0.0, 1.0, 0.4, 1.0), // Matrix Green
             Self::NeonCyber => Color::from_rgba(0.0, 1.0, 0.8, 1.0),
             Self::AppleGlass => Color::from_rgba(0.8, 0.8, 1.0, 1.0),
             Self::DeepSpace => Color::from_rgba(0.5, 0.2, 1.0, 1.0),
@@ -124,7 +121,18 @@ impl TerminalTheme {
             Self::BladeRunner => 2.5,
             Self::DeepSpace => 1.8,
             Self::AppleGlass => 0.4,
-            _ => 1.0,
+            _ => 0.8,
+        }
+    }
+
+    pub fn corner_radius(&self) -> f32 {
+        match self {
+            Self::Classic => 0.0,
+            Self::AppleGlass => 12.0,
+            Self::DeepSpace => 0.0,
+            Self::RetroAmber => 2.0,
+            Self::NeonCyber => 0.0,
+            Self::BladeRunner => 4.0,
         }
     }
 }
@@ -142,6 +150,7 @@ struct ConfigFile {
     pub visuals: Option<VisualsConfig>,
     pub power_user_mode: Option<bool>,
     pub glow_active: Option<bool>,
+    pub theme_intensities: Option<[f32; 6]>,
 }
 
 impl Default for Config {
@@ -162,6 +171,7 @@ impl Default for Config {
             glow_active: true,
             saved_width: 800.0,
             saved_height: 600.0,
+            theme_intensities: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
         }
     }
 }
@@ -247,19 +257,20 @@ impl Config {
             if let Some(th) = parsed.theme { 
                 builder.config.theme = th;
                 builder.config.neon_color = th.color();
-                // Set initial visuals based on theme if not overridden
-                if parsed.visuals.is_none() {
-                    match th {
-                        TerminalTheme::BladeRunner => builder.config.visuals.rain_intensity = 1.0,
-                        TerminalTheme::RetroAmber => builder.config.visuals.scanline_opacity = 0.5,
-                        TerminalTheme::DeepSpace => builder.config.visuals.star_density = 1.0,
-                        TerminalTheme::NeonCyber => builder.config.visuals.grid_opacity = 0.2,
-                        _ => {}
-                    }
-                }
+                // Apply saved intensity on load
+                let idx = match th {
+                    TerminalTheme::Classic => 0,
+                    TerminalTheme::NeonCyber => 1,
+                    TerminalTheme::AppleGlass => 2,
+                    TerminalTheme::DeepSpace => 3,
+                    TerminalTheme::RetroAmber => 4,
+                    TerminalTheme::BladeRunner => 5,
+                };
+                builder.config.visuals.glow_intensity = builder.config.theme_intensities[idx] * th.glow_intensity();
             }
             if let Some(v) = parsed.visuals { builder.config.visuals = v; }
             if let Some(p) = parsed.power_user_mode { builder.config.power_user_mode = p; }
+            if let Some(ti) = parsed.theme_intensities { builder.config.theme_intensities = ti; }
         }
         
         // 2. Try Env-Vars
@@ -285,6 +296,7 @@ impl Config {
             visuals: Some(self.visuals),
             power_user_mode: Some(self.power_user_mode),
             glow_active: Some(self.glow_active),
+            theme_intensities: Some(self.theme_intensities),
         };
         let toml = toml::to_string(&file)
             .map_err(|e| AppError::Config(format!("Failed to serialize TOML: {}", e)))?;
