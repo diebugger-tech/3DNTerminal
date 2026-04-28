@@ -6,29 +6,43 @@ pub fn draw(frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalPar
     let tab_start_x = rect.x + 100.0;
     
     for (i, tab) in params.tabs.iter().enumerate() {
-        let is_active = i == params.active_tab;
-        let tab_x = tab_start_x + (i as f32 * 110.0);
+        let tab_w = 100.0;
+        let tab_x = tab_start_x + (i as f32 * (tab_w + 5.0));
         let tab_rect = Rectangle {
             x: tab_x,
-            y: rect.y + 12.0,
-            width: 100.0,
-            height: 26.0,
+            y: rect.y + 8.0,
+            width: tab_w,
+            height: 25.0,
         };
+
+        let tab_color = if i == params.active_tab {
+            params.neon_color
+        } else {
+            Color::from_rgba(0.5, 0.5, 0.5, 0.5 * alpha)
+        };
+
+        // Tab Background & Border
+        frame.fill_rectangle(tab_rect.position(), tab_rect.size(), Color::from_rgba(tab_color.r, tab_color.g, tab_color.b, 0.1 * alpha));
+        frame.stroke(&Path::rectangle(tab_rect.position(), tab_rect.size()), cosmic::iced::widget::canvas::Stroke::default().with_color(tab_color).with_width(1.0));
         
-        let tab_path = Path::rectangle(Point::new(tab_rect.x, tab_rect.y), Size::new(tab_rect.width, tab_rect.height));
-        if is_active {
-            frame.fill(&tab_path, Color::from_rgba(1.0, 0.6, 0.0, 0.2 * alpha));
-            frame.stroke(&tab_path, cosmic::iced::widget::canvas::Stroke::default()
-                .with_color(Color::from_rgba(1.0, 0.6, 0.0, 0.6 * alpha))
-                .with_width(1.0));
-        }
-        
+        // Tab Title
         frame.fill_text(Text {
-            content: tab.clone(),
-            position: Point::new(tab_rect.x + 10.0, tab_rect.y + 18.0),
-            color: Color::from_rgba(1.0, 0.8, 0.4, if is_active { 1.0 } else { 0.5 } * alpha),
+            content: tab.to_string(),
+            position: Point::new(tab_x + 10.0, rect.y + 12.0),
+            color: tab_color,
             size: Pixels(13.0),
             ..Default::default()
         });
+
+        // Close button [x]
+        if params.tabs.len() > 1 {
+            frame.fill_text(Text {
+                content: "x".to_string(),
+                position: Point::new(tab_x + tab_w - 18.0, rect.y + 10.0),
+                color: if i == params.active_tab { Color::from_rgba(1.0, 0.2, 0.2, alpha) } else { Color::from_rgba(0.5, 0.2, 0.2, 0.3 * alpha) },
+                size: Pixels(10.0),
+                ..Default::default()
+            });
+        }
     }
 }

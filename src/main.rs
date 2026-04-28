@@ -411,7 +411,77 @@ impl Application for App {
                             self.cache.clear();
                             return Task::none();
                         }
+
+                        // Theme Picker Interaction
+                        if self.active_overlay == OverlayMode::Themes {
+                            let y_start = settings_rect.y + 120.0;
+                            for (i, theme) in [
+                                crate::config::TerminalTheme::Amber,
+                                crate::config::TerminalTheme::Magenta,
+                                crate::config::TerminalTheme::Cyan,
+                                crate::config::TerminalTheme::Green,
+                            ].iter().enumerate() {
+                                let chip_x = settings_rect.x + 20.0 + (i as f32 * 90.0);
+                                let chip_rect = Rectangle::new(Point::new(chip_x, y_start), Size::new(80.0, 30.0));
+                                if chip_rect.contains(pos) {
+                                    self.config.theme = *theme;
+                                    self.config.neon_color = theme.color();
+                                    self.action_flash = 1.0;
+                                    self.cache.clear();
+                                    return Task::none();
+                                }
+                            }
+                        }
                         return Task::none();
+                    }
+
+                    // 0.5 Check Tab Bar
+                    let params = ui::two_d::TerminalParams {
+                        phase: self.phase,
+                        progress: self.progress,
+                        start_time: self.start_time,
+                        corner_rect: self.corner_rect,
+                        center_rect: self.center_rect,
+                        cursor_visible: false,
+                        window_controls: None,
+                        active_corner: self.active_corner,
+                        cursor_pos: pos,
+                        physics_mode: self.config.physics_mode,
+                        hamburger_open: self.hamburger_menu.is_open,
+                        notification: self.notification.as_ref(),
+                        active_overlay: self.active_overlay,
+                        tabs: &self.tabs,
+                        active_tab: self.active_tab,
+                        action_flash: self.action_flash,
+                        neon_color: self.config.neon_color,
+                    };
+                    let (rect, _) = ui::two_d::calculate_geometry(&params);
+                    
+                    if pos.y >= rect.y + 8.0 && pos.y <= rect.y + 35.0 {
+                        // In Tab Bar height
+                        let mut current_x = rect.x + 100.0; // Offset for menu buttons
+                        for (i, _) in self.tabs.iter().enumerate() {
+                            let tab_w = 100.0;
+                            let tab_rect = Rectangle::new(Point::new(current_x, rect.y + 8.0), Size::new(tab_w, 25.0));
+                            
+                            // Check Close Button [x] on tab
+                            let close_rect = Rectangle::new(Point::new(current_x + tab_w - 20.0, rect.y + 10.0), Size::new(15.0, 15.0));
+                            if close_rect.contains(pos) && self.tabs.len() > 1 {
+                                self.tabs.remove(i);
+                                if self.active_tab >= self.tabs.len() {
+                                    self.active_tab = self.tabs.len() - 1;
+                                }
+                                self.cache.clear();
+                                return Task::none();
+                            }
+
+                            if tab_rect.contains(pos) {
+                                self.active_tab = i;
+                                self.cache.clear();
+                                return Task::none();
+                            }
+                            current_x += tab_w + 5.0;
+                        }
                     }
 
                     // 1. Check if Menu is open and hit
@@ -450,7 +520,7 @@ impl Application for App {
                                     self.hamburger_menu.is_open = false; // Auto-close
                                     let msg = match item.action {
                                         ui::hamburger_menu::MenuAction::OpenSettings => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
-                                        ui::hamburger_menu::MenuAction::TogglePhysics => Message::ToggleA11Y,
+                                        ui::hamburger_menu::MenuAction::TogglePhysics => Message::MenuAction(ui::hamburger_menu::MenuAction::TogglePhysics),
                                         ui::hamburger_menu::MenuAction::OpenThemePicker => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
                                         ui::hamburger_menu::MenuAction::NewTab => Message::NewTab,
                                         ui::hamburger_menu::MenuAction::SearchOutput => Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
