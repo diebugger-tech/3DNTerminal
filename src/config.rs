@@ -118,10 +118,10 @@ impl TerminalTheme {
 
     pub fn glow_intensity(&self) -> f32 {
         match self {
-            Self::BladeRunner => 2.5,
-            Self::DeepSpace => 1.8,
-            Self::AppleGlass => 0.4,
-            _ => 0.8,
+            Self::BladeRunner => 3.5,
+            Self::DeepSpace => 2.5,
+            Self::AppleGlass => 1.2,
+            _ => 1.5,
         }
     }
 

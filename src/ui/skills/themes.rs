@@ -42,20 +42,18 @@ impl ThemesSkill {
 
         // Track
         let track_path = Path::line(Point::new(x, y + 10.0), Point::new(x + w, y + 10.0));
-        frame.stroke(&track_path, Stroke::default().with_color(track_color).with_width(4.0));
+        frame.stroke(&track_path, Stroke::default().with_color(track_color).with_width(6.0));
 
         // Thumb
         let thumb_x = x + (value * w);
-        frame.fill_rectangle(Point::new(thumb_x - 4.0, y), Size::new(8.0, 20.0), thumb_color);
+        let thumb_color = if value > 0.01 { Color::from_rgba(0.0, 1.0, 0.8, alpha) } else { Color::from_rgba(0.5, 0.5, 0.5, alpha) };
+        frame.fill_rectangle(Point::new(thumb_x - 6.0, y), Size::new(12.0, 20.0), thumb_color);
         
-        // Value Text
-        frame.fill_text(Text {
-            content: format!("{:.0}%", value * 100.0),
-            position: Point::new(x + w + 10.0, y + 4.0),
-            color: label_color,
-            size: Pixels(10.0),
-            ..Default::default()
-        });
+        // Glow effect for thumb if active
+        if value > 0.1 {
+            let glow_rect = Path::rectangle(Point::new(thumb_x - 8.0, y - 2.0), Size::new(16.0, 24.0));
+            frame.stroke(&glow_rect, Stroke::default().with_color(Color::from_rgba(0.0, 1.0, 0.8, 0.2 * alpha)).with_width(2.0));
+        }
     }
 
     fn check_slider(&self, pos: Point, x: f32, y: f32, w: f32, value: &mut f32) -> bool {
@@ -152,6 +150,37 @@ impl TerminalSkill for ThemesSkill {
         });
     }
 
+    fn handle_drag(&self, pos: Point, rect: Rectangle, config: &mut Config) -> bool {
+        let y_start = rect.y + 70.0;
+        let mut current_y = y_start + 40.0;
+        
+        let themes = [
+            TerminalTheme::Classic,
+            TerminalTheme::NeonCyber,
+            TerminalTheme::AppleGlass,
+            TerminalTheme::DeepSpace,
+            TerminalTheme::RetroAmber,
+            TerminalTheme::BladeRunner,
+        ];
+
+        for (i, theme) in themes.iter().enumerate() {
+            let slider_x = rect.x + 220.0;
+            let slider_w = (rect.width - 280.0).max(50.0);
+            
+            // Check if mouse is in the vertical range of this row
+            if pos.y >= current_y && pos.y <= current_y + 40.0 {
+                if self.check_slider(pos, slider_x, current_y + 10.0, slider_w, &mut config.theme_intensities[i]) {
+                    if config.theme == *theme {
+                        config.visuals.glow_intensity = config.theme_intensities[i] * theme.glow_intensity();
+                    }
+                    return true;
+                }
+            }
+            current_y += 50.0;
+        }
+        false
+    }
+
     fn on_click(&self, pos: Point, rect: Rectangle, config: &mut Config) -> bool {
         let y_start = rect.y + 70.0;
         let mut current_y = y_start + 40.0;
@@ -176,9 +205,9 @@ impl TerminalSkill for ThemesSkill {
                 return true;
             }
 
-            // Check for Slider Click
+            // Check for Slider Click (Initial jump)
             let slider_x = rect.x + 220.0;
-            let slider_w = rect.width - 280.0;
+            let slider_w = (rect.width - 280.0).max(50.0);
             if self.check_slider(pos, slider_x, current_y + 10.0, slider_w, &mut config.theme_intensities[i]) {
                 if config.theme == *theme {
                     config.visuals.glow_intensity = config.theme_intensities[i] * theme.glow_intensity();

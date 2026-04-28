@@ -31,6 +31,11 @@ pub trait TerminalSkill: Send + Sync {
         false
     }
 
+    /// Verarbeitet Ziehen (Dragging) innerhalb des Overlays
+    fn handle_drag(&self, _pos: Point, _rect: Rectangle, _config: &mut Config) -> bool {
+        false
+    }
+
     /// Verarbeitet Klicks auf die Menü-Erweiterung
     fn on_menu_click(&self, _pos: Point, _rect: Rectangle, _config: &mut Config) -> bool {
         false

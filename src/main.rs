@@ -80,6 +80,7 @@ pub struct App {
     tabs: Vec<String>,
     active_tab: usize,
     action_flash: f32,
+    is_interacting_with_overlay: bool,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -293,6 +294,7 @@ impl Application for App {
             tabs: vec!["Terminal".to_string()],
             active_tab: 0,
             action_flash: 0.0,
+            is_interacting_with_overlay: false,
         };
 
         let maximize_task = app.core.maximize(None, true);
@@ -581,6 +583,34 @@ impl Application for App {
                         self.cache.clear();
                     }
                 }
+
+                // --- NEW: Overlay Dragging Support ---
+                if self.is_interacting_with_overlay && self.active_overlay != OverlayMode::None {
+                    let (rect, _) = ui::two_d::calculate_geometry(&self.params());
+                    let overlay_w = 550.0;
+                    let overlay_h = 450.0;
+                    let settings_rect = Rectangle {
+                        x: rect.x + (rect.width - overlay_w) / 2.0,
+                        y: rect.y + (rect.height - overlay_h) / 2.0,
+                        width: overlay_w,
+                        height: overlay_h,
+                    };
+
+                    let overlay_id = match self.active_overlay {
+                        OverlayMode::Themes => "themes",
+                        OverlayMode::Settings => "settings",
+                        OverlayMode::Physics => "physics",
+                        OverlayMode::A11y => "a11y",
+                        OverlayMode::Security => "security",
+                        _ => "",
+                    };
+
+                    if let Some(skill) = self.skills.iter().find(|s| s.id() == overlay_id) {
+                        if skill.handle_drag(effective_pos, settings_rect, &mut self.config) {
+                            self.cache.clear();
+                        }
+                    }
+                }
             }
             Message::ChangeTheme(theme) => {
                 self.config.theme = theme;
@@ -598,6 +628,9 @@ impl Application for App {
                     self.pressed_in_menu = on_menu;
 
                     if on_button.is_some() || on_menu || self.active_overlay != OverlayMode::None {
+                        if self.active_overlay != OverlayMode::None {
+                            self.is_interacting_with_overlay = true;
+                        }
                         return Task::none();
                     }
 
@@ -744,6 +777,12 @@ impl Application for App {
                     if self.is_dragging {
                         self.is_dragging = false;
                         return Task::none();
+                    }
+
+                    if self.is_interacting_with_overlay {
+                        self.is_interacting_with_overlay = false;
+                        let _ = self.config.save("config.toml");
+                        // We still fall through to on_click for the final release event
                     }
 
                     // 1. Sidebar/Menu Handling
