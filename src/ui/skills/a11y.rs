@@ -11,6 +11,7 @@ impl TerminalSkill for A11ySkill {
     fn label(&self) -> &'static str { "Accessibility" }
     fn subtitle(&self) -> &'static str { "Filters / Damping / Tremor" }
     fn color(&self) -> Color { Color::from_rgba(0.4, 1.0, 0.8, 1.0) } // Cyan/Teal
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { Some(crate::ui::icons::IconType::A11y) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalParams) {
         let y = rect.y + 80.0;

@@ -11,3 +11,4 @@ pub mod overlay;
 pub mod skill;
 pub mod skills;
 pub mod style;
+pub mod icons;

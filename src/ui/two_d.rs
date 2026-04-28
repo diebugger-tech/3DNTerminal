@@ -131,12 +131,39 @@ pub fn draw(
 
     let glow_intensity = params.config.visuals.glow_intensity;
     if params.config.visuals.enabled && glow_intensity > 0.01 {
+        let theme = params.config.theme;
+        
+        // Special: Blade Runner Dual Glow
+        if theme == crate::config::TerminalTheme::BladeRunner {
+            let alt_color = apply_color_filter(Color::from_rgba(1.0, 0.2, 0.5, 0.2 * alpha * glow_intensity), filter);
+            frame.stroke(&path, Stroke::default().with_color(alt_color).with_width(8.0));
+        }
+
         for i in 1..=4 {
             let glow_width = i as f32 * 2.0;
             let glow_alpha = (0.3 / i as f32) * alpha * glow_intensity;
             frame.stroke(&path, Stroke::default()
                 .with_color(apply_color_filter(Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, glow_alpha), filter))
                 .with_width(glow_width));
+        }
+
+        // Special: Apple Glass Light Edge
+        if theme == crate::config::TerminalTheme::AppleGlass {
+            let edge_path = Path::line(Point::new(rect.x + 10.0, rect.y), Point::new(rect.x + rect.width - 10.0, rect.y));
+            frame.stroke(&edge_path, Stroke::default().with_color(Color::from_rgba(1.0, 1.0, 1.0, 0.4 * alpha)).with_width(1.0));
+        }
+    }
+
+    // Special: Retro Amber Scanlines
+    if params.config.theme == crate::config::TerminalTheme::RetroAmber && alpha > 0.1 {
+        let mut scan_y = rect.y + 2.0;
+        while scan_y < rect.y + rect.height {
+            frame.fill_rectangle(
+                Point::new(rect.x, scan_y),
+                Size::new(rect.width, 1.0),
+                Color::from_rgba(0.0, 0.0, 0.0, 0.1 * alpha)
+            );
+            scan_y += 3.0;
         }
     }
 
@@ -156,7 +183,7 @@ pub fn draw(
     if let Some(controls) = params.window_controls {
         let left_anchor = Point::new(rect.x, rect.y);
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
-        controls.draw(frame, alpha, left_anchor, right_anchor, Style::BUTTON_SIZE, params.cursor_pos);
+        controls.draw(frame, alpha, left_anchor, right_anchor, Style::BUTTON_SIZE, params.cursor_pos, params.config.theme, neon_color);
     }
     
     // Resize Grip (Bottom Right) - Nr. 4 Extension
@@ -225,22 +252,28 @@ pub fn draw(
                           && params.cursor_pos.y >= item_y && params.cursor_pos.y <= item_y + 60.0;
             
             if is_hovered {
-                frame.fill(&Path::rectangle(Point::new(menu_x, item_y), Size::new(menu_w, 60.0)), apply_color_filter(Color::from_rgba(Style::NEON_ORANGE.r, Style::NEON_ORANGE.g, Style::NEON_ORANGE.b, 0.1 * alpha), filter));
+                frame.fill(&Path::rectangle(Point::new(menu_x, item_y), Size::new(menu_w, 60.0)), apply_color_filter(Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, 0.1 * alpha), filter));
+            }
+
+            // Draw Icon
+            if let Some(icon) = item.icon {
+                let icon_color = if is_hovered { params.neon_color } else { apply_color_filter(Color::from_rgba(0.7, 0.7, 0.7, alpha), filter) };
+                crate::ui::icons::draw(frame, icon, params.config.theme, Point::new(menu_x + 15.0, item_y + 15.0), 24.0, icon_color);
             }
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.label.to_string(),
-                position: Point::new(menu_x + 15.0, item_y + 25.0),
-                color: apply_color_filter(Style::NEON_YELLOW, filter),
-                size: Pixels(18.0),
+                position: Point::new(menu_x + 55.0, item_y + 15.0),
+                color: if is_hovered { params.neon_color } else { apply_color_filter(Color::from_rgba(0.9, 0.9, 0.9, alpha), filter) },
+                size: Pixels(16.0),
                 ..Default::default()
             });
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.subtitle.to_string(),
-                position: Point::new(menu_x + 15.0, item_y + 45.0),
-                color: apply_color_filter(Color::from_rgba(Style::NEON_ORANGE.r, Style::NEON_ORANGE.g, Style::NEON_ORANGE.b, 0.6 * alpha), filter),
-                size: Pixels(12.0),
+                position: Point::new(menu_x + 55.0, item_y + 35.0),
+                color: apply_color_filter(Color::from_rgba(0.5, 0.5, 0.5, 0.6 * alpha), filter),
+                size: Pixels(11.0),
                 ..Default::default()
             });
         }

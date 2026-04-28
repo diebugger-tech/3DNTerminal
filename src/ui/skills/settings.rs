@@ -11,6 +11,7 @@ impl TerminalSkill for SettingsSkill {
     fn label(&self) -> &'static str { "Settings" }
     fn subtitle(&self) -> &'static str { "Engine Configuration" }
     fn color(&self) -> Color { Color::from_rgba(1.0, 0.4, 0.0, 1.0) }
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { Some(crate::ui::icons::IconType::Settings) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, _params: &TerminalParams) {
         let y = rect.y + 80.0;

@@ -11,6 +11,7 @@ impl TerminalSkill for PhysicsSkill {
     fn label(&self) -> &'static str { "Physics" }
     fn subtitle(&self) -> &'static str { "Breathe / Magnetic / A11Y" }
     fn color(&self) -> Color { Color::from_rgba(1.0, 0.6, 0.0, 1.0) }
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { Some(crate::ui::icons::IconType::Physics) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalParams) {
         let y = rect.y + 80.0;

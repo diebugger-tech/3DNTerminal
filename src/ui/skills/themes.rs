@@ -74,6 +74,7 @@ impl TerminalSkill for ThemesSkill {
     fn label(&self) -> &'static str { "Themes" }
     fn subtitle(&self) -> &'static str { "Style Engine & Environment" }
     fn color(&self) -> Color { Color::from_rgba(0.0, 1.0, 0.8, 1.0) }
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { Some(crate::ui::icons::IconType::Palette) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalParams) {
         let is_power = params.config.power_user_mode;

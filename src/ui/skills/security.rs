@@ -11,6 +11,7 @@ impl TerminalSkill for SecuritySkill {
     fn label(&self) -> &'static str { "Security & AI Firewall" }
     fn subtitle(&self) -> &'static str { "Human-in-the-Loop Protection" }
     fn color(&self) -> Color { Color::from_rgb(1.0, 0.2, 0.2) } // Alarm-Rot
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { Some(crate::ui::icons::IconType::Anchor) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, _params: &TerminalParams) {
         let y = rect.y + 80.0;

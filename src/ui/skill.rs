@@ -17,6 +17,9 @@ pub trait TerminalSkill: Send + Sync {
     /// Primärfarbe für das UI
     fn color(&self) -> Color;
     
+    /// Optionales Icon für das Menü
+    fn icon(&self) -> Option<crate::ui::icons::IconType> { None }
+    
     /// Zeichnet den Inhalt des Overlays
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalParams);
     
