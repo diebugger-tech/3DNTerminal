@@ -21,5 +21,7 @@ pub enum Message {
     StartDragging(Point),
     DragTo(Point),
     StopDragging,
-    RawMouseEvent(cosmic::iced::mouse::Event),
+    CanvasButtonPressed(cosmic::iced::mouse::Button, Point),
+    CanvasButtonReleased(cosmic::iced::mouse::Button, Point),
+    CanvasWheelScrolled(cosmic::iced::mouse::ScrollDelta),
 }
