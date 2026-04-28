@@ -3,6 +3,7 @@ use std::time::Instant;
 use std::sync::{Arc, Mutex};
 use crate::terminal::grid::TerminalGrid;
 use crate::{AnimationPhase, CornerPosition};
+use crate::config::TerminalTheme;
 use super::math;
 use super::style::Style;
 
@@ -235,7 +236,7 @@ pub fn draw(
         }
     }
 
-    if params.hamburger_open {
+    if params.hamburger_open && params.phase == crate::app::state::AnimationPhase::Expanded && rect.width >= 500.0 && rect.height >= 400.0 {
         let menu_x = rect.x + 5.0;
         let menu_y = rect.y + 45.0;
         let menu_w = 280.0;
@@ -258,28 +259,47 @@ pub fn draw(
             // Draw Icon
             if let Some(icon) = item.icon {
                 let icon_color = if is_hovered { params.neon_color } else { apply_color_filter(Color::from_rgba(0.7, 0.7, 0.7, alpha), filter) };
-                crate::ui::icons::draw(frame, icon, params.config.theme, Point::new(menu_x + 15.0, item_y + 15.0), 24.0, icon_color);
+                crate::ui::icons::draw(frame, icon, params.config.theme, Point::new(menu_x + 15.0, item_y + 18.0), 24.0, icon_color);
+            }
+
+            // --- Theme-specific Typography ---
+            let (label_size, subtitle_size, label_color) = match params.config.theme {
+                TerminalTheme::RetroAmber => (14.0, 10.0, Color::from_rgba(1.0, 0.7, 0.0, alpha)),
+                TerminalTheme::AppleGlass => (15.0, 10.0, Color::from_rgba(0.9, 0.9, 1.0, 0.9 * alpha)),
+                TerminalTheme::BladeRunner => (17.0, 11.0, if is_hovered { params.neon_color } else { Color::from_rgba(0.8, 1.0, 1.0, alpha) }),
+                _ => (16.0, 11.0, if is_hovered { params.neon_color } else { Color::from_rgba(0.9, 0.9, 0.9, alpha) }),
+            };
+
+            // Shadow/Glow for Neon themes
+            if params.config.theme == TerminalTheme::NeonCyber || params.config.theme == TerminalTheme::BladeRunner {
+                frame.fill_text(cosmic::iced::widget::canvas::Text {
+                    content: item.label.to_string(),
+                    position: Point::new(menu_x + 56.0, item_y + 16.0),
+                    color: Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, 0.3 * alpha),
+                    size: Pixels(label_size),
+                    ..Default::default()
+                });
             }
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.label.to_string(),
                 position: Point::new(menu_x + 55.0, item_y + 15.0),
-                color: if is_hovered { params.neon_color } else { apply_color_filter(Color::from_rgba(0.9, 0.9, 0.9, alpha), filter) },
-                size: Pixels(16.0),
+                color: apply_color_filter(label_color, filter),
+                size: Pixels(label_size),
                 ..Default::default()
             });
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.subtitle.to_string(),
-                position: Point::new(menu_x + 55.0, item_y + 35.0),
-                color: apply_color_filter(Color::from_rgba(0.5, 0.5, 0.5, 0.6 * alpha), filter),
-                size: Pixels(11.0),
+                position: Point::new(menu_x + 55.0, item_y + 36.0),
+                color: apply_color_filter(Color::from_rgba(0.5, 0.5, 0.5, 0.5 * alpha), filter),
+                size: Pixels(subtitle_size),
                 ..Default::default()
             });
         }
     }
 
-    if params.active_overlay != crate::ui::overlay::OverlayMode::None {
+    if params.active_overlay != crate::ui::overlay::OverlayMode::None && params.phase == crate::app::state::AnimationPhase::Expanded && rect.width >= 500.0 && rect.height >= 400.0 {
         let overlay_id = match params.active_overlay {
             crate::ui::overlay::OverlayMode::Settings => "settings",
             crate::ui::overlay::OverlayMode::Physics => "physics",
