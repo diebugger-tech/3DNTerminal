@@ -170,22 +170,67 @@ pub fn draw(
         }
     }
     
-    // BladeRunner Polish: Rainy Night effect (Nr. 3)
-    if params.config.theme == crate::config::TerminalTheme::BladeRunner && alpha > 0.1 {
-        let time = params.start_time.elapsed().as_secs_f32();
-        for i in 0..15 {
-            let speed = 1.0 + (i as f32 % 5.0) * 0.5;
-            let x_off = (i as f32 * 53.0) % rect.width;
-            let y_off = (time * speed * 200.0 + i as f32 * 77.0) % rect.height;
-            
-            let drop_path = Path::line(
-                Point::new(rect.x + x_off, rect.y + y_off),
-                Point::new(rect.x + x_off, rect.y + y_off + 15.0)
-            );
-            frame.stroke(&drop_path, Stroke::default()
-                .with_color(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.12 * alpha))
-                .with_width(1.2));
+    // --- THEME PREMIUM EFFECTS ---
+    let time = params.start_time.elapsed().as_secs_f32();
+    
+    match params.config.theme {
+        crate::config::TerminalTheme::BladeRunner => {
+            // Rainy Night effect
+            for i in 0..15 {
+                let speed = 1.0 + (i as f32 % 5.0) * 0.5;
+                let x_off = (i as f32 * 53.0) % rect.width;
+                let y_off = (time * speed * 200.0 + i as f32 * 77.0) % rect.height;
+                
+                let drop_path = Path::line(
+                    Point::new(rect.x + x_off, rect.y + y_off),
+                    Point::new(rect.x + x_off, rect.y + y_off + 15.0)
+                );
+                frame.stroke(&drop_path, Stroke::default()
+                    .with_color(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.12 * alpha))
+                    .with_width(1.2));
+            }
         }
+        crate::config::TerminalTheme::RetroAmber => {
+            // CRT Scanlines
+            for i in (0..rect.height as i32).step_by(4) {
+                let line_path = Path::line(
+                    Point::new(rect.x, rect.y + i as f32),
+                    Point::new(rect.x + rect.width, rect.y + i as f32)
+                );
+                frame.stroke(&line_path, Stroke::default()
+                    .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.15 * alpha))
+                    .with_width(1.0));
+            }
+        }
+        crate::config::TerminalTheme::DeepSpace => {
+            // Drifting Stars
+            for i in 0..20 {
+                let x = (i as f32 * 137.0 + time * 15.0) % rect.width;
+                let y = (i as f32 * 223.0 + time * 8.0) % rect.height;
+                let s = 1.2 + (i as f32 % 2.0);
+                frame.fill_rectangle(
+                    Point::new(rect.x + x, rect.y + y),
+                    Size::new(s, s),
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.25 * alpha)
+                );
+            }
+        }
+        crate::config::TerminalTheme::NeonCyber => {
+            // Cyber Grid
+            let spacing = 45.0;
+            let grid_color = Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.06 * alpha);
+            for i in 0..(rect.width / spacing) as i32 + 1 {
+                let x = rect.x + (i as f32 * spacing);
+                frame.stroke(&Path::line(Point::new(x, rect.y), Point::new(x, rect.y + rect.height)), 
+                    Stroke::default().with_color(grid_color).with_width(1.0));
+            }
+            for i in 0..(rect.height / spacing) as i32 + 1 {
+                let y = rect.y + (i as f32 * spacing);
+                frame.stroke(&Path::line(Point::new(rect.x, y), Point::new(rect.x + rect.width, y)), 
+                    Stroke::default().with_color(grid_color).with_width(1.0));
+            }
+        }
+        _ => {} // AppleGlass remains clean/minimal
     }
 
     if let Ok(grid) = grid_mutex.lock() {
