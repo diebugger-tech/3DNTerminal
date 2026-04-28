@@ -1,4 +1,4 @@
-use cosmic::iced::{Point, Color, widget::canvas::{Frame}, Pixels, Size, Rectangle};
+use cosmic::iced::{Point, Color, widget::canvas::{Frame, Path, Stroke, path::Builder}, Pixels, Size, Rectangle};
 use crate::app::state::CornerPosition;
 use crate::config::TerminalTheme;
 use crate::ui::icons::{self, IconType};
@@ -68,16 +68,54 @@ impl WindowControls {
 
     pub fn draw(&self, frame: &mut Frame, alpha: f32, left_anchor: Point, right_anchor: Point, btn_size: f32, cursor_pos: Point, theme: TerminalTheme, neon_color: Color) {
         for (bx, by, icon, action) in Self::button_positions(left_anchor, right_anchor, btn_size) {
-            let rect = Rectangle::new(Point::new(bx, by), Size::new(btn_size, btn_size));
             let is_hovered = self.hit_test(cursor_pos, left_anchor, right_anchor, btn_size) == Some(action);
+            let rect = Rectangle::new(Point::new(bx, by), Size::new(btn_size, btn_size));
             
-            let bg_color = if is_hovered {
-                Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.1 * alpha)
-            } else {
-                Color::from_rgba(1.0, 1.0, 1.0, 0.02 * alpha)
-            };
+            // 1. Draw Button Shape based on Theme
+            let shape_color = if is_hovered { neon_color } else { Color::from_rgba(1.0, 1.0, 1.0, 0.1 * alpha) };
             
-            frame.fill_rectangle(rect.position(), rect.size(), bg_color);
+            match theme {
+                TerminalTheme::Classic | TerminalTheme::Transparent => {
+                    // No border, very clean
+                }
+                TerminalTheme::AppleGlass => {
+                    // Circular glow when hovered
+                    if is_hovered {
+                        frame.stroke(&Path::circle(Point::new(bx + btn_size/2.0, by + btn_size/2.0), btn_size/2.2), Stroke::default().with_color(neon_color).with_width(1.0));
+                    }
+                }
+                TerminalTheme::RetroAmber => {
+                    // Brackets [ ]
+                    frame.stroke(&Path::line(Point::new(bx, by), Point::new(bx, by + btn_size)), Stroke::default().with_color(shape_color).with_width(1.0));
+                    frame.stroke(&Path::line(Point::new(bx + btn_size, by), Point::new(bx + btn_size, by + btn_size)), Stroke::default().with_color(shape_color).with_width(1.0));
+                }
+                TerminalTheme::BladeRunner => {
+                    // Targeting Box (Corners only)
+                    let l = 6.0;
+                    let mut path = Path::new(|p: &mut Builder| {
+                        // Top Left
+                        p.move_to(Point::new(bx, by + l)); p.line_to(Point::new(bx, by)); p.line_to(Point::new(bx + l, by));
+                        // Top Right
+                        p.move_to(Point::new(bx + btn_size - l, by)); p.line_to(Point::new(bx + btn_size, by)); p.line_to(Point::new(bx + btn_size, by + l));
+                        // Bottom Right
+                        p.move_to(Point::new(bx + btn_size, by + btn_size - l)); p.line_to(Point::new(bx + btn_size, by + btn_size)); p.line_to(Point::new(bx + btn_size - l, by + btn_size));
+                        // Bottom Left
+                        p.move_to(Point::new(bx + l, by + btn_size)); p.line_to(Point::new(bx, by + btn_size)); p.line_to(Point::new(bx, by + btn_size - l));
+                    });
+                    frame.stroke(&path, Stroke::default().with_color(shape_color).with_width(1.0));
+                }
+                _ => {
+                    if is_hovered {
+                        frame.stroke(&Path::rectangle(rect.position(), rect.size()), Stroke::default().with_color(neon_color).with_width(1.0));
+                    }
+                }
+            }
+            
+            // 2. Draw Glow if hovered
+            if is_hovered {
+                let glow_alpha = 0.15 * alpha;
+                frame.fill_rectangle(rect.position(), rect.size(), Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, glow_alpha));
+            }
             
             let icon_color = if is_hovered { neon_color } else { Color::from_rgba(0.8, 0.8, 0.8, 0.8 * alpha) };
             icons::draw(frame, icon, theme, Point::new(bx + 4.0, by + 4.0), btn_size - 8.0, icon_color);
