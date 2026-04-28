@@ -27,6 +27,15 @@ pub fn draw(frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalPar
         ..Default::default()
     });
 
+    // Close Button [ X ]
+    frame.fill_text(Text {
+        content: "[ X ]".to_string(),
+        position: Point::new(settings_rect.x + settings_w - 60.0, settings_rect.y + 30.0),
+        color: Color::from_rgba(1.0, 0.3, 0.0, alpha),
+        size: Pixels(18.0),
+        ..Default::default()
+    });
+
     // Physics Info
     let physics_y = settings_rect.y + 80.0;
     frame.fill_text(Text {

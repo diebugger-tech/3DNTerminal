@@ -15,6 +15,15 @@ pub enum PhysicsMode {
     Hologram3D,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum TerminalTheme {
+    #[default]
+    Amber,
+    Magenta,
+    Cyan,
+    Green,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub max_scrollback: usize,
@@ -23,6 +32,18 @@ pub struct Config {
     pub flip_key: Key,
     pub font_size: f32,
     pub physics_mode: PhysicsMode,
+    pub theme: TerminalTheme,
+}
+
+impl TerminalTheme {
+    pub fn color(&self) -> Color {
+        match self {
+            Self::Amber => Color::from_rgba(1.0, 0.6, 0.0, 1.0),
+            Self::Magenta => Color::from_rgba(1.0, 0.0, 0.8, 1.0),
+            Self::Cyan => Color::from_rgba(0.0, 1.0, 0.8, 1.0),
+            Self::Green => Color::from_rgba(0.0, 1.0, 0.2, 1.0),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -33,6 +54,7 @@ struct ConfigFile {
     pub flip_key_name: Option<String>,
     pub neon_color_rgba: Option<[f32; 4]>,
     pub physics_mode: Option<PhysicsMode>,
+    pub theme: Option<TerminalTheme>,
 }
 
 impl Default for Config {
@@ -46,6 +68,7 @@ impl Default for Config {
             flip_key: Key::Named(Named::F12),
             font_size: DEFAULT_FONT_SIZE,
             physics_mode: PhysicsMode::Breathe,
+            theme: TerminalTheme::Amber,
         }
     }
 }
@@ -127,6 +150,10 @@ impl Config {
                 // Expand key mapping later
             }
             if let Some(pm) = parsed.physics_mode { builder.config.physics_mode = pm; }
+            if let Some(th) = parsed.theme { 
+                builder.config.theme = th;
+                builder.config.neon_color = th.color();
+            }
         }
         
         // 2. Try Env-Vars

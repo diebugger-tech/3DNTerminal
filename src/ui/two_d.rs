@@ -23,6 +23,7 @@ pub struct TerminalParams<'a> {
     pub tabs: &'a [String],
     pub active_tab: usize,
     pub action_flash: f32,
+    pub neon_color: Color,
 }
 
 /// Reine 2D-Geometrie-Berechnung ohne Rotationswinkel
@@ -84,6 +85,11 @@ pub fn draw(
     let (rect, alpha) = calculate_geometry(params);
     let path = Path::rounded_rectangle(rect.position(), rect.size(), 4.0.into());
 
+    // Hintergrund-Dimming wenn Settings offen sind
+    if params.settings_open {
+        frame.fill(&path, Color::from_rgba(0.0, 0.0, 0.0, 0.4 * alpha));
+    }
+
     // Hintergrund
     frame.fill(&path, Color::from_rgba(0.05, 0.1, 0.2, 0.8 * alpha));
     
@@ -92,7 +98,7 @@ pub fn draw(
         let glow_width = i as f32 * 2.0;
         let glow_alpha = (0.3 / i as f32) * alpha;
         frame.stroke(&path, Stroke::default()
-            .with_color(Color::from_rgba(0.4, 1.0, 0.8, glow_alpha))
+            .with_color(Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, glow_alpha))
             .with_width(glow_width));
     }
 
@@ -112,7 +118,7 @@ pub fn draw(
     frame.fill_text(cosmic::iced::widget::canvas::Text {
         content: "3DNTerminal".to_string(),
         position: Point::new(rect.x + margin_x + 85.0, rect.y + margin_y + 2.0), // Platz für ☰ und +
-        color: Color::from_rgba(0.4, 1.0, 0.8, alpha),
+        color: Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, alpha),
         size: Pixels(font_size),
         ..Default::default()
     });

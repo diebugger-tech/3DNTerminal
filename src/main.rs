@@ -90,6 +90,7 @@ impl canvas::Program<Message, Theme> for App {
                 tabs: &self.tabs,
                 active_tab: self.active_tab,
                 action_flash: self.action_flash,
+                neon_color: self.config.neon_color,
             };
             
             let (_, alpha) = ui::two_d::calculate_geometry(&params);
@@ -150,6 +151,7 @@ impl App {
             tabs: &self.tabs,
             active_tab: self.active_tab,
             action_flash: self.action_flash,
+            neon_color: self.config.neon_color,
         };
         let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
         let btn_size = (rect.width * 0.03).clamp(12.0, 26.0);
@@ -384,6 +386,34 @@ impl Application for App {
             }
             Message::CanvasButtonPressed(btn, pos) => {
                 if btn == mouse::Button::Left {
+                    // 0. Check if Settings is open and handle close
+                    if self.settings_open {
+                        let settings_w = 400.0;
+                        let settings_h = 300.0;
+                        let settings_rect = Rectangle {
+                            x: self.center_rect.x + (self.center_rect.width - settings_w) / 2.0,
+                            y: self.center_rect.y + (self.center_rect.height - settings_h) / 2.0,
+                            width: settings_w,
+                            height: settings_h,
+                        };
+                        
+                        // Check for [ X ] button (approximate area)
+                        let x_btn_rect = Rectangle {
+                            x: settings_rect.x + settings_w - 70.0,
+                            y: settings_rect.y + 10.0,
+                            width: 60.0,
+                            height: 40.0,
+                        };
+                        
+                        if x_btn_rect.contains(pos) || !settings_rect.contains(pos) {
+                            self.settings_open = false;
+                            self.cache.clear();
+                            return Task::none();
+                        }
+                        // Click inside settings but not on X -> ignore or handle other controls later
+                        return Task::none();
+                    }
+
                     // 1. Check if Menu is open and hit
                     if self.hamburger_menu.is_open {
                         let params = ui::two_d::TerminalParams {
@@ -403,6 +433,7 @@ impl Application for App {
                             tabs: &self.tabs,
                             active_tab: self.active_tab,
                             action_flash: self.action_flash,
+                            neon_color: self.config.neon_color,
                         };
                         let (rect, _) = ui::two_d::calculate_geometry(&params);
                         let menu_x = rect.x + 5.0;
@@ -459,6 +490,26 @@ impl Application for App {
                     ui::hamburger_menu::MenuAction::OpenSettings => {
                         self.settings_open = !self.settings_open;
                         self.action_flash = 0.8;
+                    }
+                    ui::hamburger_menu::MenuAction::OpenThemePicker => {
+                        // Cycle Themes
+                        self.config.theme = match self.config.theme {
+                            crate::config::TerminalTheme::Amber => crate::config::TerminalTheme::Magenta,
+                            crate::config::TerminalTheme::Magenta => crate::config::TerminalTheme::Cyan,
+                            crate::config::TerminalTheme::Cyan => crate::config::TerminalTheme::Green,
+                            crate::config::TerminalTheme::Green => crate::config::TerminalTheme::Amber,
+                        };
+                        self.config.neon_color = self.config.theme.color();
+                        self.notification = Some((format!("Theme: {:?}", self.config.theme), Instant::now()));
+                        self.action_flash = 1.0;
+                    }
+                    ui::hamburger_menu::MenuAction::SearchOutput => {
+                        self.notification = Some(("Search Mode: Type / to search (Placeholder)".to_string(), Instant::now()));
+                        self.action_flash = 0.5;
+                    }
+                    ui::hamburger_menu::MenuAction::ShowShortcuts => {
+                        self.notification = Some(("F12: Toggle | Corners: Collapse | +: New Tab".to_string(), Instant::now()));
+                        self.action_flash = 0.5;
                     }
                     _ => {
                         self.notification = Some((format!("Action: {:?}", action), Instant::now()));
