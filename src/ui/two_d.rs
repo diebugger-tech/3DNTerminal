@@ -19,7 +19,7 @@ pub struct TerminalParams<'a> {
     pub physics_mode: crate::config::PhysicsMode,
     pub hamburger_open: bool,
     pub notification: Option<&'a (String, Instant)>,
-    pub settings_open: bool,
+    pub active_overlay: crate::ui::overlay::OverlayMode,
     pub tabs: &'a [String],
     pub active_tab: usize,
     pub action_flash: f32,
@@ -85,8 +85,8 @@ pub fn draw(
     let (rect, alpha) = calculate_geometry(params);
     let path = Path::rounded_rectangle(rect.position(), rect.size(), 4.0.into());
 
-    // Hintergrund-Dimming wenn Settings offen sind
-    if params.settings_open {
+    // Hintergrund-Dimming wenn Overlay offen
+    if params.active_overlay != crate::ui::overlay::OverlayMode::None {
         frame.fill(&path, Color::from_rgba(0.0, 0.0, 0.0, 0.4 * alpha));
     }
 
@@ -228,7 +228,7 @@ pub fn draw(
         }
     }
 
-    // Modularer Settings Aufruf
+    // Modularer Settings Aufruf (kann jetzt mehrere Overlays handhaben)
     crate::ui::settings::draw(frame, rect, alpha, params);
 
     // Modularer Notification Aufruf

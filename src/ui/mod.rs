@@ -7,3 +7,4 @@ pub mod hamburger_menu;
 pub mod settings;
 pub mod tab_bar;
 pub mod notification;
+pub mod overlay;

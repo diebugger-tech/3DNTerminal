@@ -17,6 +17,7 @@ use cosmic::{
 };
 use threednterminal::terminal::traits::Terminal;
 use threednterminal::{terminal, ui, config, AnimationPhase, CornerPosition};
+use threednterminal::ui::overlay::OverlayMode;
 use threednterminal::app::events::Message;
 
 use std::time::{Instant, Duration};
@@ -55,7 +56,7 @@ pub struct App {
     hovered_action: Option<ui::window_controls::ButtonAction>,
     hamburger_menu: ui::hamburger_menu::HamburgerMenu,
     notification: Option<(String, Instant)>,
-    settings_open: bool,
+    active_overlay: OverlayMode,
     tabs: Vec<String>,
     active_tab: usize,
     action_flash: f32,
@@ -86,7 +87,7 @@ impl canvas::Program<Message, Theme> for App {
                 physics_mode: self.config.physics_mode,
                 hamburger_open: self.hamburger_menu.is_open,
                 notification: self.notification.as_ref(),
-                settings_open: self.settings_open,
+                active_overlay: self.active_overlay,
                 tabs: &self.tabs,
                 active_tab: self.active_tab,
                 action_flash: self.action_flash,
@@ -147,7 +148,7 @@ impl App {
             physics_mode: self.config.physics_mode,
             hamburger_open: self.hamburger_menu.is_open,
             notification: self.notification.as_ref(),
-            settings_open: self.settings_open,
+            active_overlay: self.active_overlay,
             tabs: &self.tabs,
             active_tab: self.active_tab,
             action_flash: self.action_flash,
@@ -207,7 +208,7 @@ impl Application for App {
             hovered_action: None,
             hamburger_menu: ui::hamburger_menu::HamburgerMenu::default(),
             notification: None,
-            settings_open: false,
+            active_overlay: OverlayMode::None,
             tabs: vec!["Terminal".to_string()],
             active_tab: 0,
             action_flash: 0.0,
@@ -386,10 +387,10 @@ impl Application for App {
             }
             Message::CanvasButtonPressed(btn, pos) => {
                 if btn == mouse::Button::Left {
-                    // 0. Check if Settings is open and handle close
-                    if self.settings_open {
+                    // 0. Check if Overlay is open and handle close
+                    if self.active_overlay != OverlayMode::None {
                         let settings_w = 400.0;
-                        let settings_h = 300.0;
+                        let settings_h = 320.0;
                         let settings_rect = Rectangle {
                             x: self.center_rect.x + (self.center_rect.width - settings_w) / 2.0,
                             y: self.center_rect.y + (self.center_rect.height - settings_h) / 2.0,
@@ -406,11 +407,10 @@ impl Application for App {
                         };
                         
                         if x_btn_rect.contains(pos) || !settings_rect.contains(pos) {
-                            self.settings_open = false;
+                            self.active_overlay = OverlayMode::None;
                             self.cache.clear();
                             return Task::none();
                         }
-                        // Click inside settings but not on X -> ignore or handle other controls later
                         return Task::none();
                     }
 
@@ -429,7 +429,7 @@ impl Application for App {
                             physics_mode: self.config.physics_mode,
                             hamburger_open: true,
                             notification: self.notification.as_ref(),
-                            settings_open: self.settings_open,
+                            active_overlay: self.active_overlay,
                             tabs: &self.tabs,
                             active_tab: self.active_tab,
                             action_flash: self.action_flash,
@@ -488,27 +488,23 @@ impl Application for App {
             Message::MenuAction(action) => {
                 match action {
                     ui::hamburger_menu::MenuAction::OpenSettings => {
-                        self.settings_open = !self.settings_open;
+                        self.active_overlay = if self.active_overlay == OverlayMode::Settings { OverlayMode::None } else { OverlayMode::Settings };
                         self.action_flash = 0.8;
                     }
                     ui::hamburger_menu::MenuAction::OpenThemePicker => {
-                        // Cycle Themes
-                        self.config.theme = match self.config.theme {
-                            crate::config::TerminalTheme::Amber => crate::config::TerminalTheme::Magenta,
-                            crate::config::TerminalTheme::Magenta => crate::config::TerminalTheme::Cyan,
-                            crate::config::TerminalTheme::Cyan => crate::config::TerminalTheme::Green,
-                            crate::config::TerminalTheme::Green => crate::config::TerminalTheme::Amber,
-                        };
-                        self.config.neon_color = self.config.theme.color();
-                        self.notification = Some((format!("Theme: {:?}", self.config.theme), Instant::now()));
+                        self.active_overlay = if self.active_overlay == OverlayMode::Themes { OverlayMode::None } else { OverlayMode::Themes };
                         self.action_flash = 1.0;
                     }
+                    ui::hamburger_menu::MenuAction::TogglePhysics => {
+                        self.active_overlay = if self.active_overlay == OverlayMode::Physics { OverlayMode::None } else { OverlayMode::Physics };
+                        self.action_flash = 0.8;
+                    }
                     ui::hamburger_menu::MenuAction::SearchOutput => {
-                        self.notification = Some(("Search Mode: Type / to search (Placeholder)".to_string(), Instant::now()));
+                        self.active_overlay = if self.active_overlay == OverlayMode::Search { OverlayMode::None } else { OverlayMode::Search };
                         self.action_flash = 0.5;
                     }
                     ui::hamburger_menu::MenuAction::ShowShortcuts => {
-                        self.notification = Some(("F12: Toggle | Corners: Collapse | +: New Tab".to_string(), Instant::now()));
+                        self.active_overlay = if self.active_overlay == OverlayMode::Shortcuts { OverlayMode::None } else { OverlayMode::Shortcuts };
                         self.action_flash = 0.5;
                     }
                     _ => {

@@ -38,28 +38,25 @@ cargo run --bin wgpu
 ---
 
 ## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: 2D-Basis stabilisiert. Hit-Testing auf Canvas-lokale Koordinaten umgestellt.
-- **Phase 3**: Integration modularer Widgets (Hamburger-Menü, Tabs) gestartet.
+- **Status**: Phase 3 - Modularer Rollout abgeschlossen.
+- **Architektur**: Unified Overlay-System (`OverlayMode`) eingeführt.
 
 ---
 
 ## ✅ BEHOBENE BUGS (PHASE 3)
 
-### Bug 3: Koordinaten-Mismatch im Expanded-Modus
-- **Problem**: Maus-Position in `update` entsprach nicht den gezeichneten Koordinaten in `draw`.
-- **Fix**: Synchronisation via `self.cursor_pos`, die im Canvas-Draw-Call lokalisiert wird.
-
-### Bug 4: Header-Überlappung
-- **Fix**: Titel-Text um 85px nach rechts verschoben, um Platz für ☰ und + zu schaffen.
+### Bug 5: Menü-Inkonsistenz
+- **Fix**: Umstellung aller Menüpunkte (Themes, Physics, Search) von unmittelbaren Aktionen auf dedizierte Overlay-Panels.
+- **Zentraler Close**: Alle Overlays teilen sich eine `[ X ]`-Logik und Backdrop-Click zum Schließen.
 
 ---
 
-## 🎮 UI-LOGIK (PHASE 3 - IN ARBEIT)
+## 🎮 UI-LOGIK (PHASE 3)
 
-### 1. Hamburger-Menü (☰)
-- **Design**: Blade Runner (Amber/Glow/Glass).
-- **Features**: Modulare Skill-Liste, A11y-Physics Toggle (funktioniert).
-- **Hit-Testing**: Zeilenbasierte Erkennung (60px Slots).
+### 1. Unified Overlays
+- **Module**: `settings.rs` orchestriert jetzt alle Panel-Inhalte basierend auf `OverlayMode`.
+- **Modi**: Settings, Themes, Physics, Search, Shortcuts.
+- **Design**: Glassmorphism (0.95 Alpha) + Titelfarben-Codierung (Orange/Cyan/Blue).
 
 ### 2. Tabs (+)
 - **Status**: Hit-Test aktiv, Logik-Implementation folgt (Multi-Session).
