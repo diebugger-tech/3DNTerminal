@@ -11,11 +11,17 @@
 - [x] **Draggable Area**: Fix für Window-Dragging mit sauberen Hit-Test-Grenzen.
 
 ## 🎨 Visuals & UI
-- [ ] **Enclone Inspiration**: Visuelle Effekte, Graphen-Strukturen und High-Density Information-Design (Inspo: https://10xgenomics.github.io/enclone/pages/auto/visual.html).
 - [ ] **Glow Toggle**: Dynamisches Ein/Ausschalten des Neon-Glows via Menü.
+- [ ] **UI-Theming (Frames & Buttons)**: Themes auf Rahmen und Bedienelemente anwenden (statt Hintergrund).
+- [ ] **Holographic Glassmorphism**: Transparente Menüs und schwebende UI-Elemente.
 
 ## 🚀 Performance & Backend
 - [ ] **Dirty Flag**: Neuzeichnen nur bei Terminal-Output triggern.
 - [ ] **PTY Finalization**: Vollständiger Wechsel auf das Alacritty-Backend für alle Input-Events.
 - [ ] **Cursor Blink**: Implementierung des Cursor-Blinkens im Alacritty-Grid.
 - [ ] **Arrow Navigation**: Ecken-Wechsel per Pfeiltasten implementieren.
+
+## 🌌 Phase 4: Final Vision
+- [ ] **Holographic Theme**: Maximal transparente Shell, nur Schrift und Rahmen sichtbar.
+- [ ] **3D Theme Engine**: Räumliche Darstellung des Terminals im Desktop-Space.
+- [ ] **Command Flow FX**: Visuelle Effekte beim schnellen Scrolling.

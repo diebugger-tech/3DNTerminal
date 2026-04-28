@@ -170,13 +170,17 @@ pub fn draw(
         }
     }
     
-    // --- THEME PREMIUM EFFECTS ---
+    // --- THEME PREMIUM EFFECTS (MODULAR) ---
+    // Only visible when in settings/overlays to keep the main shell clean for work.
+    let is_ui_active = params.active_overlay != crate::ui::overlay::OverlayMode::None || params.hamburger_open;
     let time = params.start_time.elapsed().as_secs_f32();
+    let visuals = &params.config.visuals;
     
-    match params.config.theme {
-        crate::config::TerminalTheme::BladeRunner => {
-            // Rainy Night effect
-            for i in 0..15 {
+    if is_ui_active {
+        // 1. Rainy Night Effect
+        if visuals.rain_intensity > 0.01 {
+            let count = (25.0 * visuals.rain_intensity) as i32;
+            for i in 0..count {
                 let speed = 1.0 + (i as f32 % 5.0) * 0.5;
                 let x_off = (i as f32 * 53.0) % rect.width;
                 let y_off = (time * speed * 200.0 + i as f32 * 77.0) % rect.height;
@@ -186,39 +190,44 @@ pub fn draw(
                     Point::new(rect.x + x_off, rect.y + y_off + 15.0)
                 );
                 frame.stroke(&drop_path, Stroke::default()
-                    .with_color(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.12 * alpha))
+                    .with_color(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.12 * alpha * visuals.rain_intensity))
                     .with_width(1.2));
             }
         }
-        crate::config::TerminalTheme::RetroAmber => {
-            // CRT Scanlines
-            for i in (0..rect.height as i32).step_by(4) {
+
+        // 2. CRT Scanlines Effect
+        if visuals.scanline_opacity > 0.01 {
+            let step = 4;
+            for i in (0..rect.height as i32).step_by(step) {
                 let line_path = Path::line(
                     Point::new(rect.x, rect.y + i as f32),
                     Point::new(rect.x + rect.width, rect.y + i as f32)
                 );
                 frame.stroke(&line_path, Stroke::default()
-                    .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.15 * alpha))
+                    .with_color(Color::from_rgba(0.0, 0.0, 0.0, 0.15 * alpha * visuals.scanline_opacity))
                     .with_width(1.0));
             }
         }
-        crate::config::TerminalTheme::DeepSpace => {
-            // Drifting Stars
-            for i in 0..20 {
+
+        // 3. Drifting Stars Effect
+        if visuals.star_density > 0.01 {
+            let count = (30.0 * visuals.star_density) as i32;
+            for i in 0..count {
                 let x = (i as f32 * 137.0 + time * 15.0) % rect.width;
                 let y = (i as f32 * 223.0 + time * 8.0) % rect.height;
                 let s = 1.2 + (i as f32 % 2.0);
                 frame.fill_rectangle(
                     Point::new(rect.x + x, rect.y + y),
                     Size::new(s, s),
-                    Color::from_rgba(1.0, 1.0, 1.0, 0.25 * alpha)
+                    Color::from_rgba(1.0, 1.0, 1.0, 0.25 * alpha * visuals.star_density)
                 );
             }
         }
-        crate::config::TerminalTheme::NeonCyber => {
-            // Cyber Grid
+
+        // 4. Cyber Grid Effect
+        if visuals.grid_opacity > 0.01 {
             let spacing = 45.0;
-            let grid_color = Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.06 * alpha);
+            let grid_color = Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.08 * alpha * visuals.grid_opacity);
             for i in 0..(rect.width / spacing) as i32 + 1 {
                 let x = rect.x + (i as f32 * spacing);
                 frame.stroke(&Path::line(Point::new(x, rect.y), Point::new(x, rect.y + rect.height)), 
@@ -230,7 +239,6 @@ pub fn draw(
                     Stroke::default().with_color(grid_color).with_width(1.0));
             }
         }
-        _ => {} // AppleGlass remains clean/minimal
     }
 
     if let Ok(grid) = grid_mutex.lock() {
