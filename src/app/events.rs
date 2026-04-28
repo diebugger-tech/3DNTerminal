@@ -16,7 +16,6 @@ pub enum Message {
     MinimizeTerminal,
     MaximizeTerminal,
     CloseApp,
-    RestoreLast,
     SetCorner(CornerPosition),
     StartDragging(Point),
     DragTo(Point),

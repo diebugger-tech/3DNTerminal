@@ -163,11 +163,12 @@ impl App {
             neon_color: self.config.neon_color,
         };
         let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
-        // Use the same button size as in two_d.rs rendering (Style::BUTTON_SIZE)
         let btn_size = ui::style::Style::BUTTON_SIZE;
         let left_anchor = Point::new(rect.x, rect.y);
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
         
+        // Use self.cursor_pos for magnetism-aware hit testing if requested, 
+        // but here we use the provided 'pos' which will be self.cursor_pos from the caller.
         self.window_controls.hit_test(pos, left_anchor, right_anchor, btn_size)
     }
 }
@@ -348,11 +349,13 @@ impl Application for App {
                 if self.phase != AnimationPhase::Expanded {
                     use cosmic::iced::keyboard::Key;
                     
+                    let mut expand = false;
                     let new_corner = match key {
                         Key::Named(keyboard::key::Named::ArrowUp) => {
                             match self.active_corner {
                                 CornerPosition::BottomLeft => Some(CornerPosition::TopLeft),
                                 CornerPosition::BottomRight => Some(CornerPosition::TopRight),
+                                CornerPosition::TopLeft | CornerPosition::TopRight => { expand = true; None },
                                 _ => None,
                             }
                         }
@@ -360,6 +363,7 @@ impl Application for App {
                             match self.active_corner {
                                 CornerPosition::TopLeft => Some(CornerPosition::BottomLeft),
                                 CornerPosition::TopRight => Some(CornerPosition::BottomRight),
+                                CornerPosition::BottomLeft | CornerPosition::BottomRight => { expand = true; None },
                                 _ => None,
                             }
                         }
@@ -367,6 +371,7 @@ impl Application for App {
                             match self.active_corner {
                                 CornerPosition::TopRight => Some(CornerPosition::TopLeft),
                                 CornerPosition::BottomRight => Some(CornerPosition::BottomLeft),
+                                CornerPosition::TopLeft | CornerPosition::BottomLeft => { expand = true; None },
                                 _ => None,
                             }
                         }
@@ -374,20 +379,34 @@ impl Application for App {
                             match self.active_corner {
                                 CornerPosition::TopLeft => Some(CornerPosition::TopRight),
                                 CornerPosition::BottomLeft => Some(CornerPosition::BottomRight),
+                                CornerPosition::TopRight | CornerPosition::BottomRight => { expand = true; None },
                                 _ => None,
                             }
                         }
                         _ => None,
                     };
 
+                    if expand {
+                        self.phase = AnimationPhase::Expanding;
+                        self.active_corner = CornerPosition::Free;
+                        self.progress = 0.0;
+                        self.cache.clear();
+                        return Task::none();
+                    }
+
                     if let Some(nc) = new_corner {
                         if nc != self.active_corner {
                             tracing::info!("Corner Jump: {:?} -> {:?}", self.active_corner, nc);
                             self.active_corner = nc;
                             self.corner_rect = nc.corner_rect(self.window_width, self.window_height);
-                            // If we were hidden, showing it in the new corner
-                            if self.phase == AnimationPhase::Hidden {
+                            
+                            // Direct jump without intermediate expansion flicker
+                            if self.phase == AnimationPhase::Hidden || self.phase == AnimationPhase::Collapsed {
                                 self.phase = AnimationPhase::Collapsed;
+                                self.progress = 1.0;
+                            } else {
+                                // If already animating (Collapsing/Expanding), keep animating but to new target
+                                self.progress = self.progress; 
                             }
                             self.cache.clear();
                             return Task::none();
@@ -462,12 +481,15 @@ impl Application for App {
                     }
                 }
             }
-            Message::CanvasButtonPressed(btn, pos) => {
+            Message::CanvasButtonPressed(btn, _pos) => {
                 if btn == mouse::Button::Left {
-                    // 0. Check if Overlay is open and handle close
+                    let effective_pos = self.cursor_pos;
+                    
+                    // 0. Check if Overlay is open
                     if self.active_overlay != OverlayMode::None {
+                        // Overlay interactions still on press for responsiveness
                         let settings_w = 400.0;
-                        let settings_h = 350.0; // Must match overlay_h in two_d.rs exactly
+                        let settings_h = 350.0;
                         let settings_rect = Rectangle {
                             x: self.center_rect.x + (self.center_rect.width - settings_w) / 2.0,
                             y: self.center_rect.y + (self.center_rect.height - settings_h) / 2.0,
@@ -475,15 +497,6 @@ impl Application for App {
                             height: settings_h,
                         };
                         
-                        // Check for [ X ] button (approximate area)
-                        let x_btn_rect = Rectangle {
-                            x: settings_rect.x + settings_w - 70.0,
-                            y: settings_rect.y + 10.0,
-                            width: 60.0,
-                            height: 40.0,
-                        };
-                        
-                        // 1. Dispatch to active skill if it handles clicks
                         let active_skill_id = match self.active_overlay {
                             OverlayMode::Settings => Some("settings"),
                             OverlayMode::Physics => Some("physics"),
@@ -494,150 +507,29 @@ impl Application for App {
 
                         if let Some(id) = active_skill_id {
                             if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
-                                if skill.on_click(pos, settings_rect, &mut self.config) {
-                                    self.action_flash = 1.0; // Visual feedback
+                                if skill.on_click(effective_pos, settings_rect, &mut self.config) {
+                                    self.action_flash = 1.0;
                                     self.cache.clear();
                                     return Task::none();
                                 }
                             }
                         }
-
-                        if x_btn_rect.contains(pos) || !settings_rect.contains(pos) {
-                            self.active_overlay = OverlayMode::None;
-                            self.cache.clear();
-                            return Task::none();
-                        }
-                        return Task::none();
                     }
 
-                    // 0.5 Check Tab Bar
-                    let params = ui::two_d::TerminalParams {
-                        phase: self.phase,
-                        progress: self.progress,
-                        start_time: self.start_time,
-                        corner_rect: self.corner_rect,
-                        center_rect: self.center_rect,
-                        cursor_visible: false,
-                        window_controls: None,
-                        active_corner: self.active_corner,
-                        cursor_pos: pos,
-                        physics: self.config.physics,
-                        a11y: self.config.a11y,
-                        hamburger_open: self.hamburger_menu.is_open,
-                        notification: self.notification.as_ref(),
-                        active_overlay: self.active_overlay,
-                        skills: &self.skills,
-                        glow_active: self.config.glow_active,
-                        tabs: &self.tabs,
-                        active_tab: self.active_tab,
-                        action_flash: self.action_flash,
-                        neon_color: self.config.neon_color,
-                    };
-                    let (rect, _) = ui::two_d::calculate_geometry(&params);
-                    
-                    if pos.y >= rect.y + 8.0 && pos.y <= rect.y + 35.0 {
-                        // In Tab Bar height
-                        let mut current_x = rect.x + 100.0; // Offset for menu buttons
-                        for (i, _) in self.tabs.iter().enumerate() {
-                            let tab_w = 100.0;
-                            let tab_rect = Rectangle::new(Point::new(current_x, rect.y + 8.0), Size::new(tab_w, 25.0));
-                            
-                            // Check Close Button [x] on tab
-                            let close_rect = Rectangle::new(Point::new(current_x + tab_w - 20.0, rect.y + 10.0), Size::new(15.0, 15.0));
-                            if close_rect.contains(pos) && self.tabs.len() > 1 {
-                                self.tabs.remove(i);
-                                if self.active_tab >= self.tabs.len() {
-                                    self.active_tab = self.tabs.len() - 1;
-                                }
-                                self.cache.clear();
-                                return Task::none();
-                            }
-
-                            if tab_rect.contains(pos) {
-                                self.active_tab = i;
-                                self.cache.clear();
-                                return Task::none();
-                            }
-                            current_x += tab_w + 5.0;
-                        }
-                    }
-
-                    // 1. Check if Menu is open and hit
-                    if self.hamburger_menu.is_open {
-                        let params = ui::two_d::TerminalParams {
-                            phase: self.phase,
-                            progress: self.progress,
-                            start_time: self.start_time,
-                            corner_rect: self.corner_rect,
-                            center_rect: self.center_rect,
-                            cursor_visible: false,
-                            window_controls: None,
-                            active_corner: self.active_corner,
-                            cursor_pos: pos,
-                            physics: self.config.physics,
-                            a11y: self.config.a11y,
-                            hamburger_open: true,
-                            notification: self.notification.as_ref(),
-                            active_overlay: self.active_overlay,
-                            skills: &self.skills,
-                            glow_active: self.config.glow_active,
-                            tabs: &self.tabs,
-                            active_tab: self.active_tab,
-                            action_flash: self.action_flash,
-                            neon_color: self.config.neon_color,
-                        };
-                        let (rect, _) = ui::two_d::calculate_geometry(&params);
-                        let menu_x = rect.x + 5.0;
-                        let menu_y = rect.y + 45.0;
-                        let menu_w = 280.0;
-                        let menu_h = 500.0;
+                    // 1. Dragging initialization (Blocked if on button or menu)
+                    if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
+                        let on_button = self.current_hit_test(effective_pos).is_some();
                         
-                        if pos.x >= menu_x && pos.x <= menu_x + menu_w {
-                            let rel_y = pos.y - menu_y;
-                            if rel_y >= 0.0 && rel_y <= menu_h {
-                                let index = (rel_y / 60.0) as usize;
-                                let items = ui::hamburger_menu::HamburgerMenu::items(params.skills);
-                                if let Some(item) = items.get(index) {
-                                    // NEW: Check for skill menu extension clicks first
-                                    if let ui::hamburger_menu::MenuAction::ExecuteSkill(id) = item.action {
-                                        if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
-                                            let item_y = menu_y + (index as f32 * 60.0);
-                                            let ext_rect = Rectangle {
-                                                x: menu_x + menu_w - 110.0,
-                                                y: item_y + 15.0,
-                                                width: 90.0,
-                                                height: 30.0,
-                                            };
-                                            if skill.on_menu_click(pos, ext_rect, &mut self.config) {
-                                                self.cache.clear();
-                                                return Task::none();
-                                            }
-                                        }
-                                    }
-
-                                    self.hamburger_menu.is_open = false; // Auto-close
-                                    let msg = match item.action {
-                                        ui::hamburger_menu::MenuAction::ExecuteSkill(id) => Message::MenuAction(ui::hamburger_menu::MenuAction::ExecuteSkill(id)),
-                                        ui::hamburger_menu::MenuAction::OpenSettings => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
-                                        ui::hamburger_menu::MenuAction::TogglePhysics => Message::MenuAction(ui::hamburger_menu::MenuAction::TogglePhysics),
-                                        ui::hamburger_menu::MenuAction::OpenThemePicker => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
-                                        ui::hamburger_menu::MenuAction::NewTab => Message::NewTab,
-                                        ui::hamburger_menu::MenuAction::SearchOutput => Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
-                                        ui::hamburger_menu::MenuAction::ShowShortcuts => Message::MenuAction(ui::hamburger_menu::MenuAction::ShowShortcuts),
-                                    };
-                                    return Task::done(cosmic::Action::App(msg));
-                                }
-                            }
+                        // Blockiere Dragging auch, wenn das Menü offen ist und getroffen wurde
+                        let mut on_menu = false;
+                        if self.hamburger_menu.is_open {
+                            // Menü ist ca 280px breit und linksbündig im center_rect
+                            on_menu = effective_pos.x >= self.center_rect.x && effective_pos.x <= self.center_rect.x + 280.0;
                         }
-                    }
 
-                    // 2. Check Window Controls
-                    if let Some(action) = self.current_hit_test(pos) {
-                        return self.execute_button_action(action);
-                    } else if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
-                        if self.center_rect.contains(pos) {
+                        if self.center_rect.contains(effective_pos) && !on_button && !on_menu {
                             self.is_dragging = true;
-                            self.drag_start_pos = pos;
+                            self.drag_start_pos = effective_pos;
                         }
                     }
                 }
@@ -715,10 +607,127 @@ impl Application for App {
                 tracing::info!("Message: ToggleHamburger -> {}", self.hamburger_menu.is_open);
                 self.cache.clear();
             }
-            Message::CanvasButtonReleased(btn, _) => {
+            Message::CanvasButtonReleased(btn, _pos) => {
                 if btn == mouse::Button::Left {
                     if self.is_dragging {
                         self.is_dragging = false;
+                        return Task::none();
+                    }
+
+                    let effective_pos = self.cursor_pos; // Use damped for visual consistency
+
+                    // 0. Check if Overlay is open and handle close logic
+                    if self.active_overlay != OverlayMode::None {
+                        let settings_w = 400.0;
+                        let settings_h = 350.0;
+                        let settings_rect = Rectangle {
+                            x: self.center_rect.x + (self.center_rect.width - settings_w) / 2.0,
+                            y: self.center_rect.y + (self.center_rect.height - settings_h) / 2.0,
+                            width: settings_w,
+                            height: settings_h,
+                        };
+                        let x_btn_rect = Rectangle {
+                            x: settings_rect.x + settings_w - 70.0,
+                            y: settings_rect.y + 10.0,
+                            width: 60.0,
+                            height: 40.0,
+                        };
+                        if x_btn_rect.contains(effective_pos) || !settings_rect.contains(effective_pos) {
+                            self.active_overlay = OverlayMode::None;
+                            self.cache.clear();
+                            return Task::none();
+                        }
+                    }
+
+                    // 0.5 Check Tab Bar
+                    let params = ui::two_d::TerminalParams {
+                        phase: self.phase,
+                        progress: self.progress,
+                        start_time: self.start_time,
+                        corner_rect: self.corner_rect,
+                        center_rect: self.center_rect,
+                        cursor_visible: false,
+                        window_controls: None,
+                        active_corner: self.active_corner,
+                        cursor_pos: effective_pos,
+                        physics: self.config.physics,
+                        a11y: self.config.a11y,
+                        hamburger_open: self.hamburger_menu.is_open,
+                        notification: self.notification.as_ref(),
+                        active_overlay: self.active_overlay,
+                        skills: &self.skills,
+                        glow_active: self.config.glow_active,
+                        tabs: &self.tabs,
+                        active_tab: self.active_tab,
+                        action_flash: self.action_flash,
+                        neon_color: self.config.neon_color,
+                    };
+                    let (rect, _) = ui::two_d::calculate_geometry(&params);
+                    
+                    if effective_pos.y >= rect.y + 8.0 && effective_pos.y <= rect.y + 35.0 {
+                        let mut current_x = rect.x + 100.0;
+                        for (i, _) in self.tabs.iter().enumerate() {
+                            let tab_w = 100.0;
+                            let tab_rect = Rectangle::new(Point::new(current_x, rect.y + 8.0), Size::new(tab_w, 25.0));
+                            let close_rect = Rectangle::new(Point::new(current_x + tab_w - 20.0, rect.y + 10.0), Size::new(15.0, 15.0));
+                            
+                            if close_rect.contains(effective_pos) && self.tabs.len() > 1 {
+                                self.tabs.remove(i);
+                                if self.active_tab >= self.tabs.len() { self.active_tab = self.tabs.len() - 1; }
+                                self.cache.clear();
+                                return Task::none();
+                            }
+                            if tab_rect.contains(effective_pos) {
+                                self.active_tab = i;
+                                self.cache.clear();
+                                return Task::none();
+                            }
+                            current_x += tab_w + 5.0;
+                        }
+                    }
+
+                    // 1. Check Hamburger Menu (Dynamic Height)
+                    if self.hamburger_menu.is_open {
+                        let menu_x = rect.x + 5.0;
+                        let menu_y = rect.y + 45.0;
+                        let menu_w = 280.0;
+                        let menu_h = (rect.height - 50.0).max(100.0);
+                        
+                        if effective_pos.x >= menu_x && effective_pos.x <= menu_x + menu_w {
+                            let rel_y = effective_pos.y - menu_y;
+                            if rel_y >= 0.0 && rel_y <= menu_h {
+                                let index = (rel_y / 60.0) as usize;
+                                let items = ui::hamburger_menu::HamburgerMenu::items(&self.skills);
+                                if let Some(item) = items.get(index) {
+                                    if let ui::hamburger_menu::MenuAction::ExecuteSkill(id) = item.action {
+                                        if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
+                                            let item_y = menu_y + (index as f32 * 60.0);
+                                            let ext_rect = Rectangle { x: menu_x + menu_w - 110.0, y: item_y + 15.0, width: 90.0, height: 30.0 };
+                                            if skill.on_menu_click(effective_pos, ext_rect, &mut self.config) {
+                                                self.cache.clear();
+                                                return Task::none();
+                                            }
+                                        }
+                                    }
+                                    self.hamburger_menu.is_open = false;
+                                    let msg = match item.action {
+                                        ui::hamburger_menu::MenuAction::ExecuteSkill(id) => Message::MenuAction(ui::hamburger_menu::MenuAction::ExecuteSkill(id)),
+                                        ui::hamburger_menu::MenuAction::OpenSettings => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
+                                        ui::hamburger_menu::MenuAction::TogglePhysics => Message::MenuAction(ui::hamburger_menu::MenuAction::TogglePhysics),
+                                        ui::hamburger_menu::MenuAction::OpenThemePicker => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
+                                        ui::hamburger_menu::MenuAction::NewTab => Message::NewTab,
+                                        ui::hamburger_menu::MenuAction::SearchOutput => Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
+                                        ui::hamburger_menu::MenuAction::ShowShortcuts => Message::MenuAction(ui::hamburger_menu::MenuAction::ShowShortcuts),
+                                    };
+                                    return Task::done(cosmic::Action::App(msg));
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Check Window Controls
+                    if let Some(action) = self.current_hit_test(effective_pos) {
+                        return self.execute_button_action(action);
                     }
                 }
                 return Task::none();
@@ -774,15 +783,6 @@ impl Application for App {
                     // Wenn bereits Collapsing: corner_rect wurde geupdated, Animation
                     // läuft weiter zur neuen Ecke
                 }
-                self.cache.clear();
-            }
-            Message::RestoreLast => {
-                tracing::info!("Message: RestoreLast -> {:?}", self.last_corner);
-                self.active_corner = self.last_corner;
-                self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
-                self.phase = AnimationPhase::Collapsing;
-                self.progress = 0.0;
-                self.is_dragging = false;
                 self.cache.clear();
             }
             Message::TerminalClosed => {}
@@ -857,29 +857,37 @@ impl App {
             ui::window_controls::ButtonAction::Close => {
                 std::process::exit(0);
             }
-            ui::window_controls::ButtonAction::RestoreLast => {
-                self.active_corner = self.last_corner;
-                self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
-                self.phase = AnimationPhase::Collapsing;
-                self.progress = 0.0;
-            }
             ui::window_controls::ButtonAction::SetCorner(p) => {
-                let already_at_corner = self.active_corner == p
-                    && (self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Collapsing);
-                if already_at_corner {
+                let is_small = self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Collapsing || self.phase == AnimationPhase::Hidden;
+                
+                if self.active_corner == p && is_small {
+                    // Toggle: Expand if already in this corner
+                    tracing::info!("SetCorner: Already in corner -> Expanding");
                     self.phase = AnimationPhase::Expanding;
                     self.active_corner = CornerPosition::Free;
                     self.progress = 0.0;
+                } else if is_small {
+                    // Direct Jump: In a corner but different one -> Update without expand flicker
+                    tracing::info!("SetCorner: Direct Jump from {:?} to {:?}", self.active_corner, p);
+                    self.last_corner = self.active_corner;
+                    self.active_corner = p;
+                    self.corner_rect = p.corner_rect(self.window_width, self.window_height);
+                    
+                    if self.phase == AnimationPhase::Hidden {
+                        self.phase = AnimationPhase::Collapsed;
+                        self.progress = 1.0;
+                    }
+                    // Animation target is now the new corner_rect
                 } else {
+                    // From Expanded -> Collapse to corner
+                    tracing::info!("SetCorner: Collapsing to {:?}", p);
                     if self.active_corner != CornerPosition::Free {
                         self.last_corner = self.active_corner;
                     }
                     self.active_corner = p;
                     self.corner_rect = p.corner_rect(self.window_width, self.window_height);
-                    if self.phase != AnimationPhase::Collapsing {
-                        self.phase = AnimationPhase::Collapsing;
-                        self.progress = 0.0;
-                    }
+                    self.phase = AnimationPhase::Collapsing;
+                    self.progress = 0.0;
                 }
             }
             ui::window_controls::ButtonAction::Hamburger => {

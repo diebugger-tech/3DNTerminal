@@ -12,23 +12,25 @@
 
 ---
 
-## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: Phase 3.6 — Finaler Release Kandidat (RC1).
+## 🛡️ STABILITY MODE (AKTIV)
+- **Status**: Phase 3.6.1 — Adaptive UI Update.
 - **Security**: 
   - **SecuritySkill** implementiert (AI-Firewall Konzept).
   - **Human-in-the-Loop** Prinzip als Architektur-Standard.
-- **Features**: 
-  - A11ySkill (Tremor, Color Filters).
-  - Physics Engine (Magnetic, Breathe).
-  - Clean Navigation Dashboards.
+
+### ⚠️ Bekannte Wayland-Bugs & Fixes
+- **Button-Interaktion**: Auf Wayland/Cosmic kann `ButtonPressed` vom Compositor verschluckt werden. 
+  - **Regel**: Klick-Events (Hit-Tests) MÜSSEN auf `ButtonReleased` reagieren.
+- **Hit-Test Synchronität**: Alle Hit-Tests MÜSSEN `self.cursor_pos` (gedämpft) verwenden, um mit dem visuellen Crosshair übereinzustimmen.
 
 ---
 
 ## 🎮 UI-LOGIK (PHASE 3)
 
-### 1. Skill-System (Plugins)
-- **Trait**: `TerminalSkill` definiert das Verhalten der Dashboards.
-- **Security**: AI-Firewall prüft alle automatisierten Tasks vor Ausführung.
+### 1. Adaptive Navigation
+- **Corner-Jumping**: Direkter Wechsel zwischen Ecken ohne Zwischenschritt.
+- **Toggle-Expand**: Klick auf die aktuelle Ecke (oder Pfeiltaste in Richtung der Ecke) vergrößert das Fenster.
+- **Dynamic Menu**: Das Hamburger-Menü passt seine Höhe (`menu_h`) dynamisch an die Fensterhöhe an.
 
 ### 2. Tremor-Kompensation
 - **Logik**: Low-Pass-Filter in `main.rs` glättet `cursor_pos`.
@@ -37,6 +39,14 @@
 - **Logik**: `lerp_rect` in `math.rs` für organische Fensterbewegung.
 
 ---
+
+## 🤖 AGENT PROTOCOL (MANDATORY)
+- **Tool usage**: Tools (`replace_file_content`, `run_command` etc.) MUST NOT be called autonomously.
+- **Workflow**: 
+  1. Analyze and Explain the problem.
+  2. Propose a Diff in the chat.
+  3. Wait for explicit "OK" before executing ANY tool.
+- **Single File Rule**: One file = one commit. STOP after edit and wait for feedback.
 
 ## Regeln für alle Agents
 - **NICHT automatisch bauen** ohne Bestätigung.
