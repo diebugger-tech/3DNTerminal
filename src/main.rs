@@ -49,7 +49,6 @@ pub struct App {
 
     // UI Components
     window_controls: ui::window_controls::WindowControls,
-    last_p2: Point,
     active_corner: CornerPosition,
     last_corner: CornerPosition,
     is_dragging: bool,
@@ -77,6 +76,7 @@ impl canvas::Program<Message, Theme> for App {
                 cursor_visible: self.cursor_visible,
                 window_controls: Some(&self.window_controls),
                 active_corner: self.active_corner,
+                cursor_pos: self.cursor_pos,
             };
             
             let (_, _, alpha) = ui::hologram::calculate_3d_geometry(&params);
@@ -97,84 +97,46 @@ impl canvas::Program<Message, Theme> for App {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<canvas::Action<Message>> {
-        let position = cursor.position_in(bounds);
-        
-        match event {
-            cosmic::iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
-                if let Some(pos) = position {
-                    // Window Controls Check
-                    let btn_size = 28.0;
-                    if self.window_controls.hit_test(pos, self.last_p2, btn_size).is_some() {
-                        return None; 
-                    }
-                    
-                    // Start Dragging if in Free mode
-                    if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
-                        if self.center_rect.contains(pos) {
-                            return Some(canvas::Action::publish(Message::StartDragging(pos)));
-                        }
-                    }
+        if let Some(pos) = cursor.position_in(bounds) {
+            match event {
+                cosmic::iced::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                    return Some(canvas::Action::publish(Message::CursorMoved(pos)));
                 }
-            }
-            cosmic::iced::Event::Mouse(mouse::Event::CursorMoved { .. }) => {
-                if let Some(pos) = position {
-                    return Some(canvas::Action::publish(Message::DragTo(pos)));
+                cosmic::iced::Event::Mouse(mouse::Event::ButtonPressed(btn)) => {
+                    return Some(canvas::Action::publish(Message::CanvasButtonPressed(*btn, pos)));
                 }
-            }
-            cosmic::iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
-                if let Some(pos) = position {
-                    if self.is_dragging {
-                        return Some(canvas::Action::publish(Message::StopDragging));
-                    }
-
-                    // Hidden-Modus: Restore Check
-                    if self.phase == AnimationPhase::Hidden {
-                        let size = 16.0;
-                        let icon_pos = match self.active_corner {
-                            CornerPosition::TopLeft     => Point::new(self.corner_rect.x + 8.0, self.corner_rect.y + 8.0),
-                            CornerPosition::TopRight    => Point::new(self.corner_rect.x + self.corner_rect.width - size - 8.0, self.corner_rect.y + 8.0),
-                            CornerPosition::BottomLeft  => Point::new(self.corner_rect.x + 8.0, self.corner_rect.y + self.corner_rect.height - size - 8.0),
-                            CornerPosition::BottomRight => Point::new(self.corner_rect.x + self.corner_rect.width - size - 8.0, self.corner_rect.y + self.corner_rect.height - size - 8.0),
-                            CornerPosition::Free        => Point::new(self.corner_rect.x + self.corner_rect.width/2.0 - size/2.0, self.corner_rect.y + self.corner_rect.height - size - 8.0),
-                        };
-                        
-                        if pos.x >= icon_pos.x && pos.x <= icon_pos.x + size
-                        && pos.y >= icon_pos.y && pos.y <= icon_pos.y + size {
-                            return Some(canvas::Action::publish(Message::MaximizeTerminal));
-                        }
-                    }
-
-                    // Window Controls Check
-                    let btn_size = 28.0;
-                    if let Some(action) = self.window_controls.hit_test(pos, self.last_p2, btn_size) {
-                        let msg = match action {
-                            ui::window_controls::ButtonAction::Minimize    => Message::MinimizeTerminal,
-                            ui::window_controls::ButtonAction::Maximize    => Message::MaximizeTerminal,
-                            ui::window_controls::ButtonAction::Close       => Message::CloseApp,
-                            ui::window_controls::ButtonAction::RestoreLast => Message::RestoreLast,
-                            ui::window_controls::ButtonAction::SetCorner(p) => Message::SetCorner(p),
-                        };
-                        return Some(canvas::Action::publish(msg));
-                    }
+                cosmic::iced::Event::Mouse(mouse::Event::ButtonReleased(btn)) => {
+                    return Some(canvas::Action::publish(Message::CanvasButtonReleased(*btn, pos)));
                 }
+                cosmic::iced::Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                    return Some(canvas::Action::publish(Message::CanvasWheelScrolled(*delta)));
+                }
+                _ => {}
             }
-            _ => {}
         }
         None
     }
 }
 
 impl App {
-    fn update_anchor(&mut self) {
-        let rect = match self.phase {
-            AnimationPhase::Expanded | AnimationPhase::Expanding => self.center_rect,
-            _ => self.corner_rect,
+    fn current_hit_test(&self, pos: Point) -> Option<ui::window_controls::ButtonAction> {
+        let params = ui::hologram::HologramParams {
+            phase: self.phase,
+            progress: self.progress,
+            start_time: self.start_time,
+            corner_rect: self.corner_rect,
+            center_rect: self.center_rect,
+            cursor_visible: false,
+            window_controls: None,
+            active_corner: self.active_corner,
+            cursor_pos: self.cursor_pos,
         };
-        let margin_y = 12.0; // Fester Abstand von oben
-        self.last_p2 = Point::new(
-            rect.x + rect.width - 12.0, // Abstand von rechts
-            rect.y + margin_y,
-        );
+        let (rect, angle_y, _) = ui::hologram::calculate_3d_geometry(&params);
+        let cos_a = angle_y.to_radians().cos();
+        let btn_size = (rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
+        let p2 = Point::new(rect.x + rect.width, rect.y);
+        
+        self.window_controls.hit_test(pos, p2, btn_size)
     }
 }
 
@@ -217,7 +179,6 @@ impl Application for App {
             window_width: init_w,
             window_height: init_h,
             window_controls: ui::window_controls::WindowControls::new(),
-            last_p2: Point::ORIGIN,
             active_corner: CornerPosition::Free,
             last_corner: CornerPosition::BottomRight,
             is_dragging: false,
@@ -261,8 +222,6 @@ impl Application for App {
                     self.cursor_visible = current_cursor_visible;
                     needs_redraw = true;
                 }
-
-                self.update_anchor();
 
                 if needs_redraw {
                     self.cache.clear();
@@ -314,7 +273,6 @@ impl Application for App {
                 );
                 self.corner_rect = self.active_corner.corner_rect(w, h);
                 
-                self.update_anchor();
                 self.cache.clear();
                 
                 // Calculate new grid size based on expanded mode (center_rect)
@@ -338,8 +296,42 @@ impl Application for App {
                 
                 self.cache.clear();
             }
-            Message::CursorMoved(_) => {}
-            Message::MouseClicked(_) => {}
+            Message::CursorMoved(pos) => {
+                self.cursor_pos = pos;
+                if self.is_dragging {
+                    let delta_x = pos.x - self.drag_start_pos.x;
+                    let delta_y = pos.y - self.drag_start_pos.y;
+                    self.center_rect.x += delta_x;
+                    self.center_rect.y += delta_y;
+                    self.drag_start_pos = pos;
+                    self.cache.clear();
+                } else if self.current_hit_test(pos).is_some() {
+                    self.cache.clear();
+                }
+            }
+            Message::CanvasButtonPressed(btn, pos) => {
+                if btn == mouse::Button::Left {
+                    if let Some(action) = self.current_hit_test(pos) {
+                        // We execute actions on press to avoid the cursor slipping off the button
+                        // as the window starts animating.
+                        return self.execute_button_action(action);
+                    } else if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
+                        if self.center_rect.contains(pos) {
+                            self.is_dragging = true;
+                            self.drag_start_pos = pos;
+                        }
+                    }
+                }
+                return Task::none();
+            }
+            Message::CanvasButtonReleased(btn, _) => {
+                if btn == mouse::Button::Left {
+                    if self.is_dragging {
+                        self.is_dragging = false;
+                    }
+                }
+                return Task::none();
+            }
             Message::MinimizeTerminal => {
                 tracing::info!("Message: MinimizeTerminal -> Hidden");
                 self.phase = AnimationPhase::Hidden;
@@ -391,7 +383,6 @@ impl Application for App {
                     // Wenn bereits Collapsing: corner_rect wurde geupdated, Animation
                     // läuft weiter zur neuen Ecke
                 }
-                self.update_anchor();
                 self.cache.clear();
             }
             Message::RestoreLast => {
@@ -401,44 +392,23 @@ impl Application for App {
                 self.phase = AnimationPhase::Collapsing;
                 self.progress = 0.0;
                 self.is_dragging = false;
-                self.update_anchor();
                 self.cache.clear();
             }
             Message::TerminalClosed => {}
-            Message::StartDragging(pos) => {
-                self.is_dragging = true;
-                self.drag_start_pos = pos;
-            }
-            Message::DragTo(pos) => {
-                if self.is_dragging {
-                    let delta_x = pos.x - self.drag_start_pos.x;
-                    let delta_y = pos.y - self.drag_start_pos.y;
-                    self.center_rect.x += delta_x;
-                    self.center_rect.y += delta_y;
-                    self.drag_start_pos = pos;
-                    self.update_anchor();
-                    self.cache.clear();
-                }
-            }
-            Message::StopDragging => {
-                self.is_dragging = false;
-            }
-            Message::RawMouseEvent(ev) => {
-                match ev {
-                    mouse::Event::WheelScrolled { delta } => {
-                        if self.phase == AnimationPhase::Expanded {
-                            let scroll_val = match delta {
-                                mouse::ScrollDelta::Lines { y, .. } => y,
-                                mouse::ScrollDelta::Pixels { y, .. } => y.signum(),
-                            };
-                            if scroll_val > 0.0 {
-                                self.terminal_engine.scroll_up(3);
-                            } else if scroll_val < 0.0 {
-                                self.terminal_engine.scroll_down(3);
-                            }
-                        }
+            Message::StartDragging(_) | Message::DragTo(_) | Message::StopDragging => {}
+            Message::MouseClicked(_) => {}
+            Message::CanvasWheelScrolled(delta) => {
+                if self.phase == AnimationPhase::Expanded {
+                    let scroll_val = match delta {
+                        mouse::ScrollDelta::Lines { y, .. } => y,
+                        mouse::ScrollDelta::Pixels { y, .. } => y.signum(),
+                    };
+                    if scroll_val > 0.0 {
+                        self.terminal_engine.scroll_up(3);
+                    } else if scroll_val < 0.0 {
+                        self.terminal_engine.scroll_down(3);
                     }
-                    _ => {}
+                    self.cache.clear();
                 }
             }
         }
@@ -453,10 +423,6 @@ impl Application for App {
         container(canvas)
             .width(Length::Fill)
             .height(Length::Fill)
-            .style(|_theme: &Theme| container::Style {
-                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.01).into()),
-                ..Default::default()
-            })
             .into()
     }
 
@@ -464,27 +430,70 @@ impl Application for App {
         let tick = cosmic::iced::time::every(Duration::from_millis(16)).map(Message::Tick);
         
         let events = cosmic::iced::event::listen_with(|event, _status, _window_id| {
-            // Log ALL mouse events as requested
-            if let Event::Mouse(mouse_event) = &event {
-                tracing::info!("Subscription: Raw Mouse Event: {:?}", mouse_event);
-            }
-
             match event {
-                    Event::Mouse(ev) => {
-                        return Some(Message::RawMouseEvent(ev));
-                    }
-                    Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) => {
-                        return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
-                    }
-                    Event::Window(cosmic::iced::window::Event::Resized(size)) => {
-                        return Some(Message::WindowResized(size.width, size.height));
-                    }
-                    _ => {}
+                Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, text, .. }) => {
+                    return Some(Message::KeyPressed(key, modifiers, text.map(|t| t.to_string())));
                 }
-                None
-            });
+                Event::Window(cosmic::iced::window::Event::Resized(size)) => {
+                    return Some(Message::WindowResized(size.width, size.height));
+                }
+                _ => {}
+            }
+            None
+        });
 
         Subscription::batch(vec![tick, events])
+    }
+}
+
+impl App {
+    fn execute_button_action(&mut self, action: ui::window_controls::ButtonAction) -> Task<Message> {
+        match action {
+            ui::window_controls::ButtonAction::Minimize => {
+                return self.core.minimize(None);
+            }
+            ui::window_controls::ButtonAction::Maximize => {
+                if self.phase == AnimationPhase::Hidden || self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Collapsing {
+                    self.phase = AnimationPhase::Expanding;
+                    self.active_corner = CornerPosition::Free;
+                } else {
+                    self.phase = AnimationPhase::Collapsing;
+                    self.active_corner = self.last_corner;
+                    self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
+                }
+                self.progress = 0.0;
+            }
+            ui::window_controls::ButtonAction::Close => {
+                std::process::exit(0);
+            }
+            ui::window_controls::ButtonAction::RestoreLast => {
+                self.active_corner = self.last_corner;
+                self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
+                self.phase = AnimationPhase::Collapsing;
+                self.progress = 0.0;
+            }
+            ui::window_controls::ButtonAction::SetCorner(p) => {
+                let already_at_corner = self.active_corner == p
+                    && (self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Collapsing);
+                if already_at_corner {
+                    self.phase = AnimationPhase::Expanding;
+                    self.active_corner = CornerPosition::Free;
+                    self.progress = 0.0;
+                } else {
+                    if self.active_corner != CornerPosition::Free {
+                        self.last_corner = self.active_corner;
+                    }
+                    self.active_corner = p;
+                    self.corner_rect = p.corner_rect(self.window_width, self.window_height);
+                    if self.phase != AnimationPhase::Collapsing {
+                        self.phase = AnimationPhase::Collapsing;
+                        self.progress = 0.0;
+                    }
+                }
+            }
+        }
+        self.cache.clear();
+        Task::none()
     }
 }
 
