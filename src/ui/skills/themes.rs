@@ -9,13 +9,13 @@ pub struct ThemesSkill;
 impl TerminalSkill for ThemesSkill {
     fn id(&self) -> &'static str { "themes" }
     fn label(&self) -> &'static str { "Themes" }
-    fn subtitle(&self) -> &'static str { "Amber / Magenta / Cobalt" }
+    fn subtitle(&self) -> &'static str { "BladeRunner / Apple Glass / Deep Space" }
     fn color(&self) -> Color { Color::from_rgba(0.0, 1.0, 0.8, 1.0) }
 
     fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, _params: &TerminalParams) {
         let y = rect.y + 80.0;
         frame.fill_text(Text {
-            content: "SELECT SYSTEM COLOR".to_string(),
+            content: "SELECT SYSTEM STYLE".to_string(),
             position: Point::new(rect.x + 20.0, y),
             color: Color::from_rgba(0.8, 0.8, 0.8, alpha),
             size: Pixels(18.0),
@@ -23,19 +23,20 @@ impl TerminalSkill for ThemesSkill {
         });
         
         for (i, (name, theme)) in [
-            ("Amber", TerminalTheme::Amber),
-            ("Magenta", TerminalTheme::Magenta),
-            ("Cyan", TerminalTheme::Cyan),
-            ("Green", TerminalTheme::Green),
+            ("BladeRunner", TerminalTheme::BladeRunner),
+            ("Apple Glass", TerminalTheme::AppleGlass),
+            ("Deep Space", TerminalTheme::DeepSpace),
+            ("Retro Amber", TerminalTheme::RetroAmber),
+            ("Neon Cyber", TerminalTheme::NeonCyber),
         ].iter().enumerate() {
-            let chip_x = rect.x + 20.0 + (i as f32 * 90.0);
+            let chip_x = rect.x + 20.0 + (i as f32 * 105.0);
             let chip_y = y + 40.0;
-            frame.fill_rectangle(Point::new(chip_x, chip_y), Size::new(80.0, 30.0), theme.color());
+            frame.fill_rectangle(Point::new(chip_x, chip_y), Size::new(95.0, 30.0), theme.color());
             frame.fill_text(Text {
                 content: name.to_string(),
                 position: Point::new(chip_x, chip_y + 45.0),
                 color: Color::from_rgba(0.7, 0.7, 0.7, alpha),
-                size: Pixels(12.0),
+                size: Pixels(11.0),
                 ..Default::default()
             });
         }
@@ -44,15 +45,16 @@ impl TerminalSkill for ThemesSkill {
     fn on_click(&self, pos: Point, rect: Rectangle, config: &mut Config) -> bool {
         let y_start = rect.y + 120.0;
         let themes = [
-            TerminalTheme::Amber,
-            TerminalTheme::Magenta,
-            TerminalTheme::Cyan,
-            TerminalTheme::Green,
+            TerminalTheme::BladeRunner,
+            TerminalTheme::AppleGlass,
+            TerminalTheme::DeepSpace,
+            TerminalTheme::RetroAmber,
+            TerminalTheme::NeonCyber,
         ];
 
         for (i, theme) in themes.iter().enumerate() {
-            let chip_x = rect.x + 20.0 + (i as f32 * 90.0);
-            let chip_rect = Rectangle::new(Point::new(chip_x, y_start), Size::new(80.0, 30.0));
+            let chip_x = rect.x + 20.0 + (i as f32 * 105.0);
+            let chip_rect = Rectangle::new(Point::new(chip_x, y_start), Size::new(95.0, 30.0));
             if chip_rect.contains(pos) {
                 tracing::info!("ThemesSkill: Selected theme {:?}", theme);
                 config.theme = *theme;

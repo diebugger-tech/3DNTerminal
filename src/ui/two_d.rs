@@ -28,6 +28,7 @@ pub struct TerminalParams<'a> {
     pub active_tab: usize,
     pub action_flash: f32,
     pub neon_color: Color,
+    pub config: &'a crate::config::Config,
 }
 
 pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
@@ -124,14 +125,16 @@ pub fn draw(
     let path = Path::rounded_rectangle(rect.position(), rect.size(), 4.0.into());
 
     if params.active_overlay != crate::ui::overlay::OverlayMode::None {
-        frame.fill(&path, Style::BG_DIM);
+        let bg_alpha = params.config.theme.bg_alpha() * alpha;
+        frame.fill(&path, Color::from_rgba(0.0, 0.0, 0.05, bg_alpha));
     }
 
     frame.fill(&path, bg_color);
     
+    let glow_intensity = params.config.theme.glow_intensity();
     for i in 1..=4 {
         let glow_width = i as f32 * 2.0;
-        let glow_alpha = (0.3 / i as f32) * alpha;
+        let glow_alpha = (0.3 / i as f32) * alpha * glow_intensity;
         frame.stroke(&path, Stroke::default()
             .with_color(apply_color_filter(Color::from_rgba(params.neon_color.r, params.neon_color.g, params.neon_color.b, glow_alpha), filter))
             .with_width(glow_width));

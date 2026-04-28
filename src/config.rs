@@ -52,10 +52,11 @@ impl Default for A11yConfig {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum TerminalTheme {
     #[default]
-    Amber,
-    Magenta,
-    Cyan,
-    Green,
+    NeonCyber,
+    AppleGlass,
+    DeepSpace,
+    RetroAmber,
+    BladeRunner,
 }
 
 #[derive(Debug, Clone)]
@@ -69,15 +70,36 @@ pub struct Config {
     pub a11y: A11yConfig,
     pub theme: TerminalTheme,
     pub glow_active: bool,
+    pub saved_width: f32,
+    pub saved_height: f32,
 }
 
 impl TerminalTheme {
     pub fn color(&self) -> Color {
         match self {
-            Self::Amber => Color::from_rgba(1.0, 0.6, 0.0, 1.0),
-            Self::Magenta => Color::from_rgba(1.0, 0.0, 0.8, 1.0),
-            Self::Cyan => Color::from_rgba(0.0, 1.0, 0.8, 1.0),
-            Self::Green => Color::from_rgba(0.0, 1.0, 0.2, 1.0),
+            Self::NeonCyber => Color::from_rgba(0.0, 1.0, 0.8, 1.0),
+            Self::AppleGlass => Color::from_rgba(0.8, 0.8, 1.0, 1.0),
+            Self::DeepSpace => Color::from_rgba(0.5, 0.2, 1.0, 1.0),
+            Self::RetroAmber => Color::from_rgba(1.0, 0.6, 0.0, 1.0),
+            Self::BladeRunner => Color::from_rgba(0.0, 1.0, 0.83, 1.0), // Starkes Teal
+        }
+    }
+
+    pub fn bg_alpha(&self) -> f32 {
+        match self {
+            Self::AppleGlass => 0.1,
+            Self::DeepSpace => 0.4,
+            Self::BladeRunner => 0.15,
+            _ => 0.25,
+        }
+    }
+
+    pub fn glow_intensity(&self) -> f32 {
+        match self {
+            Self::BladeRunner => 2.5,
+            Self::DeepSpace => 1.8,
+            Self::AppleGlass => 0.4,
+            _ => 1.0,
         }
     }
 }
@@ -107,8 +129,10 @@ impl Default for Config {
             font_size: DEFAULT_FONT_SIZE,
             physics: PhysicsConfig::default(),
             a11y: A11yConfig::default(),
-            theme: TerminalTheme::Amber,
+            theme: TerminalTheme::NeonCyber,
             glow_active: true,
+            saved_width: 800.0,
+            saved_height: 600.0,
         }
     }
 }
@@ -205,5 +229,23 @@ impl Config {
         }
         
         builder.build()
+    }
+
+    pub fn save(&self, path: &str) -> Result<(), AppError> {
+        let file = ConfigFile {
+            max_scrollback: Some(self.max_scrollback),
+            blink_interval: Some(self.blink_interval),
+            font_size: Some(self.font_size),
+            flip_key_name: Some("F12".to_string()),
+            neon_color_rgba: Some([self.neon_color.r, self.neon_color.g, self.neon_color.b, self.neon_color.a]),
+            physics: Some(self.physics),
+            a11y: Some(self.a11y),
+            theme: Some(self.theme),
+            glow_active: Some(self.glow_active),
+        };
+        let toml = toml::to_string(&file)
+            .map_err(|e| AppError::Config(format!("Failed to serialize TOML: {}", e)))?;
+        fs::write(path, toml)?;
+        Ok(())
     }
 }

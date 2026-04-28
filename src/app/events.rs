@@ -27,4 +27,5 @@ pub enum Message {
     ToggleHamburger,
     ToggleA11Y,
     MenuAction(crate::ui::hamburger_menu::MenuAction),
+    ChangeTheme(crate::config::TerminalTheme),
 }

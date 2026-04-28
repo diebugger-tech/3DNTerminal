@@ -9,6 +9,8 @@ pub enum ButtonAction {
     SetCorner(CornerPosition),
     Hamburger,
     NewTab,
+    SaveSize,
+    Resize,
 }
 
 pub struct WindowControls;
@@ -41,6 +43,9 @@ impl WindowControls {
         let tr_x       = right_anchor.x - btn_size * 6.0 - gap * 5.0 - sep;
         let tl_x       = right_anchor.x - btn_size * 7.0 - gap * 6.0 - sep;
 
+        let anchor_x   = right_anchor.x - btn_size * 8.0 - gap * 7.0 - sep;
+        let resize_x   = right_anchor.x - btn_size * 9.0 - gap * 8.0 - sep;
+
         btns.push((close_x,   ry, "×", ButtonAction::Close));
         btns.push((max_x,     ry, "□", ButtonAction::Maximize));
         btns.push((min_x,     ry, "−", ButtonAction::Minimize));
@@ -48,6 +53,8 @@ impl WindowControls {
         btns.push((bl_x,      ry, "↙", ButtonAction::SetCorner(CornerPosition::BottomLeft)));
         btns.push((tr_x,      ry, "↗", ButtonAction::SetCorner(CornerPosition::TopRight)));
         btns.push((tl_x,      ry, "↖", ButtonAction::SetCorner(CornerPosition::TopLeft)));
+        btns.push((anchor_x,  ry, "⚓", ButtonAction::SaveSize));
+        btns.push((resize_x,  ry, "⤢", ButtonAction::Resize));
 
         btns
     }

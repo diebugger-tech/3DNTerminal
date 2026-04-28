@@ -62,6 +62,7 @@ pub struct App {
     tabs: Vec<String>,
     active_tab: usize,
     action_flash: f32,
+    is_resizing: bool,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -97,6 +98,7 @@ impl canvas::Program<Message, Theme> for App {
                 active_tab: self.active_tab,
                 action_flash: self.action_flash,
                 neon_color: self.config.neon_color,
+                config: &self.config,
             };
             
             let (_, alpha) = ui::two_d::calculate_geometry(&params);
@@ -161,6 +163,7 @@ impl App {
             active_tab: self.active_tab,
             action_flash: self.action_flash,
             neon_color: self.config.neon_color,
+            config: &self.config,
         };
         let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
         let btn_size = ui::style::Style::BUTTON_SIZE;
@@ -224,6 +227,7 @@ impl Application for App {
             tabs: vec!["Terminal".to_string()],
             active_tab: 0,
             action_flash: 0.0,
+            is_resizing: false,
         };
 
         let maximize_task = app.core.maximize(None, true);
@@ -481,7 +485,18 @@ impl Application for App {
                     }
                 }
             }
+            Message::ChangeTheme(theme) => {
+                self.config.theme = theme;
+                self.config.neon_color = theme.color();
+                self.cache.clear();
+            }
             Message::CanvasButtonPressed(btn, _pos) => {
+                if self.is_resizing {
+                    self.is_resizing = false;
+                    self.cache.clear();
+                    return Task::none();
+                }
+
                 if btn == mouse::Button::Left {
                     let effective_pos = self.cursor_pos;
                     
@@ -608,7 +623,17 @@ impl Application for App {
                 self.cache.clear();
             }
             Message::CanvasButtonReleased(btn, _pos) => {
+                let effective_pos = self.cursor_pos;
                 if btn == mouse::Button::Left {
+                    // Update center_rect size if resizing
+                    if self.is_resizing {
+                        let new_w = (effective_pos.x - self.center_rect.x).max(200.0);
+                        let new_h = (effective_pos.y - self.center_rect.y).max(150.0);
+                        self.center_rect.width = new_w;
+                        self.center_rect.height = new_h;
+                        self.cache.clear();
+                    }
+
                     if self.is_dragging {
                         self.is_dragging = false;
                         return Task::none();
@@ -661,6 +686,7 @@ impl Application for App {
                         active_tab: self.active_tab,
                         action_flash: self.action_flash,
                         neon_color: self.config.neon_color,
+                        config: &self.config,
                     };
                     let (rect, _) = ui::two_d::calculate_geometry(&params);
                     
@@ -718,6 +744,7 @@ impl Application for App {
                                         ui::hamburger_menu::MenuAction::NewTab => Message::NewTab,
                                         ui::hamburger_menu::MenuAction::SearchOutput => Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
                                         ui::hamburger_menu::MenuAction::ShowShortcuts => Message::MenuAction(ui::hamburger_menu::MenuAction::ShowShortcuts),
+                                        ui::hamburger_menu::MenuAction::ChangeTheme(theme) => Message::ChangeTheme(theme),
                                     };
                                     return Task::done(cosmic::Action::App(msg));
                                 }
@@ -853,6 +880,21 @@ impl App {
                     self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
                 }
                 self.progress = 0.0;
+            }
+            ui::window_controls::ButtonAction::SaveSize => {
+                self.config.saved_width = self.center_rect.width;
+                self.config.saved_height = self.center_rect.height;
+                if let Err(e) = self.config.save("config.toml") {
+                    tracing::error!("Failed to save config: {:?}", e);
+                } else {
+                    tracing::info!("Saved window size: {}x{}", self.config.saved_width, self.config.saved_height);
+                }
+                self.action_flash = 1.0;
+            }
+            ui::window_controls::ButtonAction::Resize => {
+                self.is_resizing = !self.is_resizing;
+                tracing::info!("Resize mode: {}", self.is_resizing);
+                self.action_flash = 0.5;
             }
             ui::window_controls::ButtonAction::Close => {
                 std::process::exit(0);

@@ -41,14 +41,11 @@
 ---
 
 ## 🤖 AGENT PROTOCOL (MANDATORY)
-- **Tool usage**: Tools (`replace_file_content`, `run_command` etc.) MUST NOT be called autonomously.
-- **Workflow**: 
-  1. Analyze and Explain the problem.
-  2. Propose a Diff in the chat.
-  3. Wait for explicit "OK" before executing ANY tool.
+- **Planning First**: Analyze and explain the problem + propose a Diff. 
+- **Tool usage**: Tools (`replace_file_content`, `run_command` etc.) MUST NOT be called until the user says **"bau"** or **"build"**.
 - **Single File Rule**: One file = one commit. STOP after edit and wait for feedback.
 
 ## Regeln für alle Agents
-- **NICHT automatisch bauen** ohne Bestätigung.
+- **NICHT automatisch bauen** ohne Bestätigung ("bau").
 - **STOP after edit** — keine Verifikations-Loops ohne Feedback.
 - **Security-First**: Alle AI-Interaktionen müssen das Security-Modul berücksichtigen.
