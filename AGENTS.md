@@ -37,14 +37,14 @@ cargo run --bin wgpu
 
 ---
 
-## 🛡️ STABILITY MODE (AKTIV)
-- **Status**: 3D-Hologramm-Effekt vorerst ausgelagert / deaktiviert.
-- **Ziel**: 100% zuverlässige Button-Interaktion im 2D-Raum.
-- **Wiederherstellung**: Sobald die 2D-Basis perfekt sitzt, wird der 3D-Effekt als Option reaktiviert.
+## 🛡️ STABILITY MODE (ERFOLGREICH VALIDIERT)
+- **Status**: 2D-Basis und Hit-Testing stabilisiert.
+- **Resultat**: 100% zuverlässige Interaktion durch Canvas-lokale Koordinaten.
+- **Wiederherstellung**: Die Basis sitzt. Reaktivierung des 3D-Effekts ist der nächste Schritt (Phase 3).
 
 ---
 
-## 🎮 UI-LOGIK (PHASE 2)
+## 🎮 UI-LOGIK (PHASE 2 - COMPLETED)
 
 ### 1. Die Pfeile (↖ ↗ ↙ ↘)
 - **Funktion**: Schicken das Terminal sofort in die jeweilige Ecke (`Collapsed`-Modus).
@@ -52,9 +52,9 @@ cargo run --bin wgpu
 - **Toggle**: Klick auf die *aktuelle* Ecke schickt das Terminal zurück in die Mitte (`Expanded`).
 
 ### 2. Minimieren (−)
-- **Aktion**: Wechselt in den internen `Hidden`-Zustand.
-- **Visual**: Nur ein kleines cyanfarbenes Quadrat in der aktiven Ecke bleibt sichtbar.
-- **Restore**: Klick auf dieses Quadrat klappt das Terminal wieder auf.
+- **Aktion**: Nutzt `core.minimize(None)` für echtes OS-Docking.
+- **Visual**: Fenster verschwindet in das Cosmic/Wayland Dock.
+- **Restore**: Über das System-Dock wiederherstellbar.
 
 ### 3. Maximieren (□)
 - **Aktion**: Toggle zwischen Mitte (`Expanded`) und der letzten Ecke (`Collapsed`).
@@ -177,35 +177,14 @@ match active_corner {
 
 ---
 
-## Bekannte Bugs
+## ✅ BEHOBENE BUGS (PHASE 2)
 
-### Bug 1: Wayland schluckt ButtonPressed
-**Ursache:** Compositor konsumiert `ButtonPressed` für Hit-Testing.
-**Fix:** Auf `ButtonReleased` reagieren statt `ButtonPressed`:
-```rust
-mouse::Event::ButtonReleased(mouse::Button::Left) => { ... }
-```
+### Bug 1: Wayland schluckt Events / Koordinaten-Offset
+- **Ursache**: Globale Wayland-Events vs. lokale Iced-Bounds + 65px Hardcoded-Offset.
+- **Fix**: Komplette Migration auf `iced::canvas::Program::update`. Nutzung von `cursor.position_in(bounds)` für native, relative Koordinaten.
 
-### Bug 2: Doppelte Dekorationen
-**Fix:**
-```rust
-Settings::default()
-    .transparent(true)
-    .client_decorations(false)
-// NICHT: .decorations(false) — kompiliert nicht in libcosmic
-```
-
-### Bug 3: Task/Action Wrapper
-**Fix:**
-```rust
-// FALSCH:
-Task::perform(async move { msg }, |m| m)
-// RICHTIG:
-Task::perform(async move { msg }, |m| cosmic::Action::App(m))
-```
-
-### Bug 4: Durchklicken auf transparente Bereiche
-**Fix:** Hintergrund nie komplett transparent — mindestens 1% Opacity.
+### Bug 2: Klick-Swallowing (Multi-Click-Problem)
+- **Fix**: Ausführung von Button-Aktionen direkt bei `CanvasButtonPressed` statt erst bei `Released`. Verhindert das "Abrutschen" des Cursors während der Animation.
 
 ---
 
