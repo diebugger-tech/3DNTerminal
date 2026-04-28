@@ -7,12 +7,21 @@ use std::env;
 use crate::error::AppError;
 use crate::constants::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
-pub enum PhysicsMode {
-    Static,
-    #[default]
-    Breathe,
-    Hologram3D,
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PhysicsConfig {
+    pub breathe: bool,
+    pub magnetic: bool,
+    pub reduce_motion: bool,
+}
+
+impl Default for PhysicsConfig {
+    fn default() -> Self {
+        Self {
+            breathe: true,
+            magnetic: true,
+            reduce_motion: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
@@ -31,7 +40,7 @@ pub struct Config {
     pub neon_color: Color,
     pub flip_key: Key,
     pub font_size: f32,
-    pub physics_mode: PhysicsMode,
+    pub physics: PhysicsConfig,
     pub theme: TerminalTheme,
     pub glow_active: bool,
 }
@@ -54,7 +63,7 @@ struct ConfigFile {
     pub font_size: Option<f32>,
     pub flip_key_name: Option<String>,
     pub neon_color_rgba: Option<[f32; 4]>,
-    pub physics_mode: Option<PhysicsMode>,
+    pub physics: Option<PhysicsConfig>,
     pub theme: Option<TerminalTheme>,
     pub glow_active: Option<bool>,
 }
@@ -69,7 +78,7 @@ impl Default for Config {
             ),
             flip_key: Key::Named(Named::F12),
             font_size: DEFAULT_FONT_SIZE,
-            physics_mode: PhysicsMode::Breathe,
+            physics: PhysicsConfig::default(),
             theme: TerminalTheme::Amber,
             glow_active: true,
         }
@@ -152,7 +161,7 @@ impl Config {
                 if key_str == "F12" { builder = builder.flip_key(Key::Named(Named::F12)); }
                 // Expand key mapping later
             }
-            if let Some(pm) = parsed.physics_mode { builder.config.physics_mode = pm; }
+            if let Some(p) = parsed.physics { builder.config.physics = p; }
             if let Some(th) = parsed.theme { 
                 builder.config.theme = th;
                 builder.config.neon_color = th.color();

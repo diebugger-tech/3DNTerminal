@@ -1,4 +1,4 @@
-use cosmic::iced::{Rectangle, Color, Point, Size, Pixels};
+use cosmic::iced::{Rectangle, Color, Point, Pixels};
 use cosmic::iced::widget::canvas::{Frame, Path, Stroke, Text};
 use crate::ui::two_d::TerminalParams;
 use crate::ui::overlay::OverlayMode;

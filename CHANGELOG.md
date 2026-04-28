@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-04-28
+### Added
+- **Modular Physics Architecture**: Introduced `PhysicsConfig` struct for granular control over effects.
+- **Interactive Skill Extensions**: Added `draw_menu_extension` and `on_menu_click` to the `TerminalSkill` trait, enabling toggles/sliders directly in the Hamburger menu.
+- **A11Y Mode**: Implemented a "Reduce Motion" master switch that disables autonomous animations (Breathe, Hamburger slide).
+- **Physics Skill Enhancement**: Interactive status indicator in the sidebar that cycles through modular flags (Breathe, Minimal, Magnetic, A11Y).
+
+### Changed
+- Refactored `two_d.rs` to respect modular physics and A11Y flags.
+- Updated `main.rs` to support the new skill-based interaction model.
+- Cleaned up unused imports and improved code modularity.
+
 ## [0.2.1] - 2026-04-24
 ### Added
 - **Window Controls**: Modular button system for Minimize, Maximize, and Close with hover states and tooltips.

@@ -16,7 +16,7 @@ pub struct TerminalParams<'a> {
     pub window_controls: Option<&'a crate::ui::window_controls::WindowControls>,
     pub active_corner: CornerPosition,
     pub cursor_pos: Point,
-    pub physics_mode: crate::config::PhysicsMode,
+    pub physics: crate::config::PhysicsConfig,
     pub hamburger_open: bool,
     pub notification: Option<&'a (String, Instant)>,
     pub active_overlay: crate::ui::overlay::OverlayMode,
@@ -33,12 +33,11 @@ pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
     match params.phase {
         AnimationPhase::Collapsed => {
             // Ein leichtes Schweben in der Ecke als 2D-Effekt
-            let hover = match params.physics_mode {
-                crate::config::PhysicsMode::Breathe => {
-                    let time = params.start_time.elapsed().as_secs_f32();
-                    (time * 2.0).sin() * 4.0
-                }
-                _ => 0.0
+            let hover = if params.physics.breathe && !params.physics.reduce_motion {
+                let time = params.start_time.elapsed().as_secs_f32();
+                (time * 2.0).sin() * 4.0
+            } else {
+                0.0
             };
             let mut rect = params.corner_rect;
             rect.y += hover;

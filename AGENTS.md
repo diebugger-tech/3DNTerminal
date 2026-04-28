@@ -38,8 +38,11 @@ cargo run --bin wgpu
 ---
 
 ## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: Phase 3 - Skill-Architektur implementiert.
-- **Architektur**: Modularer `TerminalSkill`-Trait für alle internen Module (Physics, Themes, Settings).
+- **Status**: Phase 3.5 - Modular Physics & A11Y implementiert.
+- **Architektur**: 
+  - Modularer `TerminalSkill`-Trait für alle internen Module.
+  - **Interaktive Physik**: Steuerung einzelner Module (Breathe, Magnetic, A11Y) via Hamburger-Menü Extensions.
+  - **Config v2**: Zentralisierte `PhysicsConfig` für granulare Kontrolle.
 
 ---
 
@@ -48,6 +51,7 @@ cargo run --bin wgpu
 ### Bug 6: Starre Overlay-Logik
 - **Fix**: Migration von hartcodierten Overlays auf ein dynamisches Skill-System.
 - **Interaktivität**: Support für Toggles und Slider direkt im Hamburger-Menü via `draw_menu_extension`.
+- **Physik**: Vollständige Modularisierung von Breathe- und A11Y-Effekten.
 
 ---
 

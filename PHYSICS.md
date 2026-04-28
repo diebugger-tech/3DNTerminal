@@ -2,17 +2,26 @@
 
 ---
 
-## Bereits implementierte Physik (v0.2.1)
+## Bereits implementierte Physik (v0.3.5)
+
+### Modular Physics (Neu)
+Alle Effekte sind nun einzeln schaltbar über den `PhysicsSkill` im Hamburger-Menü.
 
 ### Breathe-Physik (Sinus-Hover)
-Organisches Schweben im Collapsed-State via Sinus-Welle. Implementiert in `ui/two_d.rs` (vormals `hologram.rs`).
+Organisches Schweben im Collapsed-State via Sinus-Welle. 
+- Status: ✅ Implementiert (Modular schaltbar)
+
+### A11Y-Integration (Reduce Motion)
+Globaler Master-Switch für Barrierefreiheit. Deaktiviert alle autonomen Animationen.
+- Status: ✅ Implementiert (Modular schaltbar)
 
 ### Dynamisches Button-Anchoring
 Buttons kleben physikalisch korrekt an der Terminal-Kante.
-Funktioniert bei Kippen, Skalieren, allen Animationszuständen.
+- Status: ✅ Implementiert
 
 ### Transition-Physik (Corner-Flip)
 Zwei-phasige Bewegung beim State-Wechsel via Cubic-Bezier Easing.
+- Status: ✅ Implementiert
 
 ---
 

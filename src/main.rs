@@ -86,7 +86,7 @@ impl canvas::Program<Message, Theme> for App {
                 window_controls: Some(&self.window_controls),
                 active_corner: self.active_corner,
                 cursor_pos: self.cursor_pos,
-                physics_mode: self.config.physics_mode,
+                physics: self.config.physics,
                 hamburger_open: self.hamburger_menu.is_open,
                 notification: self.notification.as_ref(),
                 active_overlay: self.active_overlay,
@@ -149,7 +149,7 @@ impl App {
             window_controls: None,
             active_corner: self.active_corner,
             cursor_pos: self.cursor_pos,
-            physics_mode: self.config.physics_mode,
+            physics: self.config.physics,
             hamburger_open: self.hamburger_menu.is_open,
             notification: self.notification.as_ref(),
             active_overlay: self.active_overlay,
@@ -269,7 +269,7 @@ impl Application for App {
                 }
 
                 // 5. Hamburger Menu Animation (A11Y Check)
-                if self.config.physics_mode == crate::config::PhysicsMode::Static {
+                if self.config.physics.reduce_motion {
                     let target_t = if self.hamburger_menu.is_open { 1.0 } else { 0.0 };
                     if (self.hamburger_menu.animation_t - target_t).abs() > 0.001 {
                         self.hamburger_menu.animation_t = target_t;
@@ -471,7 +471,7 @@ impl Application for App {
                         window_controls: None,
                         active_corner: self.active_corner,
                         cursor_pos: pos,
-                        physics_mode: self.config.physics_mode,
+                        physics: self.config.physics,
                         hamburger_open: self.hamburger_menu.is_open,
                         notification: self.notification.as_ref(),
                         active_overlay: self.active_overlay,
@@ -523,7 +523,7 @@ impl Application for App {
                             window_controls: None,
                             active_corner: self.active_corner,
                             cursor_pos: pos,
-                            physics_mode: self.config.physics_mode,
+                            physics: self.config.physics,
                             hamburger_open: true,
                             notification: self.notification.as_ref(),
                             active_overlay: self.active_overlay,
@@ -592,14 +592,20 @@ impl Application for App {
                 return Task::none();
             }
             Message::ToggleA11Y => {
-                self.config.physics_mode = match self.config.physics_mode {
-                    crate::config::PhysicsMode::Static => crate::config::PhysicsMode::Breathe,
-                    crate::config::PhysicsMode::Breathe => crate::config::PhysicsMode::Hologram3D,
-                    crate::config::PhysicsMode::Hologram3D => crate::config::PhysicsMode::Static,
-                };
-                self.notification = Some((format!("Physics Mode: {:?}", self.config.physics_mode), Instant::now()));
+                // Cycle through modular flags
+                if self.config.physics.reduce_motion {
+                    self.config.physics.reduce_motion = false;
+                    self.config.physics.breathe = true;
+                } else if self.config.physics.breathe {
+                    self.config.physics.breathe = false;
+                } else {
+                    self.config.physics.reduce_motion = true;
+                }
+                
+                let status = if self.config.physics.reduce_motion { "A11Y / Static" } else if self.config.physics.breathe { "Breathe" } else { "Minimal" };
+                self.notification = Some((format!("Physics Mode: {}", status), Instant::now()));
                 self.action_flash = 1.0;
-                tracing::info!("Physics: Mode -> {:?}", self.config.physics_mode);
+                tracing::info!("Physics: Mode -> {}", status);
                 self.cache.clear();
             }
             Message::MenuAction(action) => {

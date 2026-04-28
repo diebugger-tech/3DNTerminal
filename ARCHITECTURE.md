@@ -15,8 +15,10 @@
 - **events.rs**: Defines `AppEvent` for message passing within the UI loop.
 
 ### `src/ui/`
-- **hologram.rs**: Encapsulates all 3D Canvas rendering logic. Handles the cross-product matrix transformations for the holographic terminal effect.
-- **math.rs**: Core mathematical utilities (bezier curves, vector cross products for hit-testing).
+- **two_d.rs**: (Replaces hologram.rs) The 2D-optimized orchestrator for terminal rendering. Coordinates overlays, notifications, and modular skills.
+- **skill.rs**: The `TerminalSkill` trait definition. Every internal UI feature (Settings, Physics, Themes) is a plugin implementing this trait.
+- **skills/**: Modular plugin directory. Skills manage their own state, overlay rendering, and sidebar interactions.
+- **math.rs**: Core mathematical utilities (bezier curves, etc.).
 
 ### `src/terminal/`
 - **mod.rs**: The `TerminalEngine`. Spawns the PTY and bridges it with the UI. Implements the `Terminal` trait.
