@@ -17,8 +17,8 @@ pub struct PhysicsConfig {
 impl Default for PhysicsConfig {
     fn default() -> Self {
         Self {
-            breathe: true,
-            magnetic: true,
+            breathe: false,
+            magnetic: false,
             reduce_motion: false,
         }
     }

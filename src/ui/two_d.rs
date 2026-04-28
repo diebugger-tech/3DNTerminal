@@ -158,6 +158,24 @@ pub fn draw(
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
         controls.draw(frame, alpha, left_anchor, right_anchor, Style::BUTTON_SIZE, params.cursor_pos);
     }
+    
+    // BladeRunner Polish: Rainy Night effect (Nr. 3)
+    if params.config.theme == crate::config::TerminalTheme::BladeRunner && alpha > 0.1 {
+        let time = params.start_time.elapsed().as_secs_f32();
+        for i in 0..15 {
+            let speed = 1.0 + (i as f32 % 5.0) * 0.5;
+            let x_off = (i as f32 * 53.0) % rect.width;
+            let y_off = (time * speed * 200.0 + i as f32 * 77.0) % rect.height;
+            
+            let drop_path = Path::line(
+                Point::new(rect.x + x_off, rect.y + y_off),
+                Point::new(rect.x + x_off, rect.y + y_off + 15.0)
+            );
+            frame.stroke(&drop_path, Stroke::default()
+                .with_color(Color::from_rgba(neon_color.r, neon_color.g, neon_color.b, 0.12 * alpha))
+                .with_width(1.2));
+        }
+    }
 
     if let Ok(grid) = grid_mutex.lock() {
         let start_x = rect.x + Style::MARGIN_X;
