@@ -1,3 +1,15 @@
+/*
+#[deprecated(note = "3D hologram mode is temporarily frozen for 2D stability. Use ui::two_d instead.")]
+pub mod frozen {
+    use cosmic::iced::{Point, Rectangle, Size, Color, widget::canvas::{Frame, Path, Stroke}, Pixels};
+    // ... rest of the file ...
+}
+*/
+
+// Note: The content below is frozen and currently not used.
+// It remains as a reference for Phase 4 (3D re-activation).
+
+/*
 use cosmic::iced::{Point, Rectangle, Size, Color, widget::canvas::{Frame, Path, Stroke}, Pixels};
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
@@ -241,3 +253,4 @@ pub fn draw(
         }
     }
 }
+*/

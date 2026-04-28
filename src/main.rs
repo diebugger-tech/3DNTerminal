@@ -66,7 +66,7 @@ impl canvas::Program<Message, Theme> for App {
         _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let geometry = self.cache.draw(renderer, bounds.size(), |frame: &mut Frame| {
-            let params = ui::hologram::HologramParams {
+            let params = ui::two_d::TerminalParams {
                 phase: self.phase,
                 progress: self.progress,
                 start_time: self.start_time,
@@ -78,13 +78,13 @@ impl canvas::Program<Message, Theme> for App {
                 cursor_pos: self.cursor_pos,
             };
             
-            let (_, _, alpha) = ui::hologram::calculate_3d_geometry(&params);
+            let (_, alpha) = ui::two_d::calculate_geometry(&params);
             
             if alpha > 0.0 {
                 frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::from_rgba(0.02, 0.02, 0.05, alpha));
             }
 
-            ui::hologram::draw(frame, &self.terminal_engine.grid, &params);
+            ui::two_d::draw(frame, &self.terminal_engine.grid, &params);
         });
         vec![geometry]
     }
@@ -119,7 +119,7 @@ impl canvas::Program<Message, Theme> for App {
 
 impl App {
     fn current_hit_test(&self, pos: Point) -> Option<ui::window_controls::ButtonAction> {
-        let params = ui::hologram::HologramParams {
+        let params = ui::two_d::TerminalParams {
             phase: self.phase,
             progress: self.progress,
             start_time: self.start_time,
@@ -130,9 +130,8 @@ impl App {
             active_corner: self.active_corner,
             cursor_pos: self.cursor_pos,
         };
-        let (rect, angle_y, _) = ui::hologram::calculate_3d_geometry(&params);
-        let cos_a = angle_y.to_radians().cos();
-        let btn_size = (rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
+        let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
+        let btn_size = (rect.width * 0.03).clamp(12.0, 26.0);
         let p2 = Point::new(rect.x + rect.width, rect.y);
         
         self.window_controls.hit_test(pos, p2, btn_size)
