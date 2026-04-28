@@ -1,0 +1,17 @@
+max_scrollback = 1000
+blink_interval = 500
+font_size = 14.0
+flip_key_name = "F12"
+neon_color_rgba = [0.4000000059604645, 1.0, 0.800000011920929, 1.0]
+theme = "NeonCyber"
+glow_active = true
+
+[physics]
+breathe = true
+magnetic = true
+reduce_motion = false
+
+[a11y]
+tremor_damping = 0.0
+color_filter = "None"
+reduce_motion = 0.0

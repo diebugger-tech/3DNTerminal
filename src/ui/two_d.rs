@@ -147,7 +147,7 @@ pub fn draw(
 
     frame.fill_text(cosmic::iced::widget::canvas::Text {
         content: "3DNTerminal".to_string(),
-        position: Point::new(header_rect.x + 35.0, header_rect.y + 12.0),
+        position: Point::new(header_rect.x + 80.0, header_rect.y + 12.0),
         color: neon_color,
         size: Pixels(Style::HEADER_FONT_SIZE),
         ..Default::default()

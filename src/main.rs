@@ -410,7 +410,6 @@ impl Application for App {
                                 self.progress = 1.0;
                             } else {
                                 // If already animating (Collapsing/Expanding), keep animating but to new target
-                                self.progress = self.progress; 
                             }
                             self.cache.clear();
                             return Task::none();
