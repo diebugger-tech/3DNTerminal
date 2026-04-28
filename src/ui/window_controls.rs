@@ -44,15 +44,23 @@ impl WindowControls {
         ]
     }
 
-    pub fn draw(&self, frame: &mut Frame, alpha: f32, anchor: Point, btn_size: f32, active_corner: CornerPosition) {
+    pub fn draw(&self, frame: &mut Frame, alpha: f32, anchor: Point, btn_size: f32, active_corner: CornerPosition, cursor_pos: Point) {
         if alpha <= 0.0 { return; }
 
         let by = anchor.y + btn_size * 1.2;
         let cyan = Color::from_rgba(0.4, 1.0, 0.8, alpha);
-        let cyan_fill = Color::from_rgba(0.4, 1.0, 0.8, alpha * 0.25);
+        let hover_bg = Color::from_rgba(0.4, 1.0, 0.8, alpha * 0.4);
 
         for (bx, icon, action) in Self::button_positions(anchor, btn_size) {
             let path = Path::rectangle(Point::new(bx, by), Size::new(btn_size, btn_size));
+
+            let margin = 2.0;
+            let hit = cursor_pos.x >= bx - margin && cursor_pos.x <= bx + btn_size + margin
+                   && cursor_pos.y >= by - margin && cursor_pos.y <= by + btn_size + margin;
+
+            if hit {
+                frame.fill(&path, hover_bg);
+            }
 
             frame.stroke(&path, Stroke::default()
                 .with_color(cyan)
