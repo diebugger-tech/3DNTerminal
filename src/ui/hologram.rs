@@ -14,6 +14,7 @@ pub struct HologramParams<'a> {
     pub cursor_visible: bool,
     pub window_controls: Option<&'a crate::ui::window_controls::WindowControls>,
     pub active_corner: CornerPosition,
+    pub cursor_pos: Point,
 }
 
 pub fn calculate_3d_geometry(params: &HologramParams) -> (Rectangle, f32, f32) {
@@ -163,7 +164,7 @@ pub fn draw(
 
             if let Some(controls) = params.window_controls {
                 let btn_size = (target_rect.width * 0.03 * cos_a.max(0.4)).clamp(12.0, 26.0);
-                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size, params.active_corner);
+                controls.draw(frame, border_alpha * flip_alpha, p2, btn_size, params.active_corner, params.cursor_pos);
             }
         }
 
