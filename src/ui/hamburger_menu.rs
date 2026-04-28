@@ -29,10 +29,13 @@ impl HamburgerMenu {
         Self::default()
     }
 
-    pub fn items(skills: &[Box<dyn crate::ui::skill::TerminalSkill>]) -> Vec<MenuItem> {
+    pub fn items(skills: &[Box<dyn crate::ui::skill::TerminalSkill>], power_user_mode: bool) -> Vec<MenuItem> {
         let mut menu = Vec::new();
         
         for skill in skills {
+            if power_user_mode && skill.id() == "a11y" {
+                continue;
+            }
             menu.push(MenuItem {
                 label: skill.label(),
                 subtitle: skill.subtitle(),
@@ -54,7 +57,7 @@ impl HamburgerMenu {
         pos.x >= left_anchor.x && pos.x <= left_anchor.x + menu_w
     }
 
-    pub fn on_click(&self, pos: Point, left_anchor: Point, menu_h: f32, skills: &[Box<dyn crate::ui::skill::TerminalSkill>]) -> Option<MenuAction> {
+    pub fn on_click(&self, pos: Point, left_anchor: Point, menu_h: f32, skills: &[Box<dyn crate::ui::skill::TerminalSkill>], power_user_mode: bool) -> Option<MenuAction> {
         if !self.is_open { return None; }
         let menu_x = left_anchor.x + 5.0;
         let menu_y = left_anchor.y + 45.0;
@@ -64,7 +67,7 @@ impl HamburgerMenu {
             let rel_y = pos.y - menu_y;
             if rel_y >= 0.0 && rel_y <= menu_h {
                 let index = (rel_y / 60.0) as usize;
-                let items = Self::items(skills);
+                let items = Self::items(skills, power_user_mode);
                 if let Some(item) = items.get(index) {
                     return Some(item.action);
                 }

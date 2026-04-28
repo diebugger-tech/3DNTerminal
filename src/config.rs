@@ -14,6 +14,29 @@ pub struct PhysicsConfig {
     pub reduce_motion: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VisualsConfig {
+    pub enabled: bool,
+    pub rain_intensity: f32,
+    pub star_density: f32,
+    pub scanline_opacity: f32,
+    pub grid_opacity: f32,
+    pub glow_intensity: f32,
+}
+
+impl Default for VisualsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            rain_intensity: 0.0,
+            star_density: 0.0,
+            scanline_opacity: 0.0,
+            grid_opacity: 0.0,
+            glow_intensity: 1.0,
+        }
+    }
+}
+
 impl Default for PhysicsConfig {
     fn default() -> Self {
         Self {
@@ -69,6 +92,8 @@ pub struct Config {
     pub physics: PhysicsConfig,
     pub a11y: A11yConfig,
     pub theme: TerminalTheme,
+    pub visuals: VisualsConfig,
+    pub power_user_mode: bool,
     pub glow_active: bool,
     pub saved_width: f32,
     pub saved_height: f32,
@@ -114,6 +139,8 @@ struct ConfigFile {
     pub physics: Option<PhysicsConfig>,
     pub a11y: Option<A11yConfig>,
     pub theme: Option<TerminalTheme>,
+    pub visuals: Option<VisualsConfig>,
+    pub power_user_mode: Option<bool>,
     pub glow_active: Option<bool>,
 }
 
@@ -130,6 +157,8 @@ impl Default for Config {
             physics: PhysicsConfig::default(),
             a11y: A11yConfig::default(),
             theme: TerminalTheme::NeonCyber,
+            visuals: VisualsConfig::default(),
+            power_user_mode: false,
             glow_active: true,
             saved_width: 800.0,
             saved_height: 600.0,
@@ -218,7 +247,19 @@ impl Config {
             if let Some(th) = parsed.theme { 
                 builder.config.theme = th;
                 builder.config.neon_color = th.color();
+                // Set initial visuals based on theme if not overridden
+                if parsed.visuals.is_none() {
+                    match th {
+                        TerminalTheme::BladeRunner => builder.config.visuals.rain_intensity = 1.0,
+                        TerminalTheme::RetroAmber => builder.config.visuals.scanline_opacity = 0.5,
+                        TerminalTheme::DeepSpace => builder.config.visuals.star_density = 1.0,
+                        TerminalTheme::NeonCyber => builder.config.visuals.grid_opacity = 0.2,
+                        _ => {}
+                    }
+                }
             }
+            if let Some(v) = parsed.visuals { builder.config.visuals = v; }
+            if let Some(p) = parsed.power_user_mode { builder.config.power_user_mode = p; }
         }
         
         // 2. Try Env-Vars
@@ -241,6 +282,8 @@ impl Config {
             physics: Some(self.physics),
             a11y: Some(self.a11y),
             theme: Some(self.theme),
+            visuals: Some(self.visuals),
+            power_user_mode: Some(self.power_user_mode),
             glow_active: Some(self.glow_active),
         };
         let toml = toml::to_string(&file)

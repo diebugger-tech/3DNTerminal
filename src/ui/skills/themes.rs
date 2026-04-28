@@ -12,7 +12,7 @@ impl TerminalSkill for ThemesSkill {
     fn subtitle(&self) -> &'static str { "System Styles & Presets" }
     fn color(&self) -> Color { Color::from_rgba(0.0, 1.0, 0.8, 1.0) }
 
-    fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, _params: &TerminalParams) {
+    fn draw_overlay(&self, frame: &mut Frame, rect: Rectangle, alpha: f32, params: &TerminalParams) {
         let y = rect.y + 80.0;
         frame.fill_text(Text {
             content: "SELECT SYSTEM STYLE".to_string(),
@@ -43,6 +43,30 @@ impl TerminalSkill for ThemesSkill {
             });
         }
 
+        // --- POWER USER TOGGLE ---
+        let toggle_y = rect.y + 220.0;
+        let is_power = params.config.power_user_mode;
+        let btn_color = if is_power { Color::from_rgba(0.0, 1.0, 0.8, alpha) } else { Color::from_rgba(0.3, 0.3, 0.3, alpha) };
+        
+        frame.fill_rectangle(Point::new(rect.x + 20.0, toggle_y), Size::new(200.0, 40.0), btn_color);
+        frame.fill_text(Text {
+            content: if is_power { "[ MODE: POWER USER ]" } else { "[ MODE: STANDARD ]" }.to_string(),
+            position: Point::new(rect.x + 40.0, toggle_y + 12.0),
+            color: if is_power { Color::BLACK } else { Color::WHITE },
+            size: Pixels(14.0),
+            ..Default::default()
+        });
+
+        if is_power {
+            frame.fill_text(Text {
+                content: "Note: Accessibility menu is hidden in Power User Mode.".to_string(),
+                position: Point::new(rect.x + 20.0, toggle_y + 55.0),
+                color: Color::from_rgba(1.0, 0.5, 0.0, alpha), // Warning Orange
+                size: Pixels(11.0),
+                ..Default::default()
+            });
+        }
+
         frame.fill_text(Text {
             content: "Note: Custom Environment Sliders are currently in planning.".to_string(),
             position: Point::new(rect.x + 20.0, rect.y + rect.height - 40.0),
@@ -53,6 +77,7 @@ impl TerminalSkill for ThemesSkill {
     }
 
     fn on_click(&self, pos: Point, rect: Rectangle, config: &mut Config) -> bool {
+        // 1. Check Theme Chips
         let y_start = rect.y + 120.0;
         let themes = [
             TerminalTheme::BladeRunner,
@@ -69,7 +94,6 @@ impl TerminalSkill for ThemesSkill {
                 config.theme = *theme;
                 config.neon_color = theme.color();
                 
-                // Set default visuals for the selected theme
                 config.visuals = crate::config::VisualsConfig::default();
                 match theme {
                     TerminalTheme::BladeRunner => config.visuals.rain_intensity = 1.0,
@@ -81,6 +105,15 @@ impl TerminalSkill for ThemesSkill {
                 return true;
             }
         }
+
+        // 2. Check Power User Toggle
+        let toggle_y = rect.y + 220.0;
+        let toggle_rect = Rectangle::new(Point::new(rect.x + 20.0, toggle_y), Size::new(200.0, 40.0));
+        if toggle_rect.contains(pos) {
+            config.power_user_mode = !config.power_user_mode;
+            return true;
+        }
+
         false
     }
 }

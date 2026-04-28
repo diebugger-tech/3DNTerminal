@@ -286,7 +286,7 @@ pub fn draw(
         frame.fill(&menu_path, Color::from_rgba(Style::BG_DARK.r, Style::BG_DARK.g, Style::BG_DARK.b, 0.95 * alpha));
         frame.stroke(&menu_path, Stroke::default().with_color(apply_color_filter(Style::NEON_ORANGE, filter)).with_width(1.5));
 
-        let items = crate::ui::hamburger_menu::HamburgerMenu::items(params.skills);
+        let items = crate::ui::hamburger_menu::HamburgerMenu::items(params.skills, params.config.power_user_mode);
         for (i, item) in items.iter().enumerate() {
             let item_y = menu_y + (i as f32 * 60.0);
             let is_hovered = params.cursor_pos.x >= menu_x && params.cursor_pos.x <= menu_x + menu_w 
