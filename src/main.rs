@@ -141,6 +141,45 @@ impl canvas::Program<Message, Theme> for App {
         }
         None
     }
+
+    fn mouse_interaction(
+        &self,
+        _state: &Self::State,
+        _bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if let Some(pos) = cursor.position_in(_bounds) {
+            let (rect, _) = ui::two_d::calculate_geometry(&self.params());
+            
+            // 1. Check for Resize Grip (Bottom Right)
+            let grip_size = 30.0;
+            let grip_rect = Rectangle::new(
+                Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
+                Size::new(grip_size, grip_size)
+            );
+            if grip_rect.contains(pos) {
+                return mouse::Interaction::Pointer; // Fallback to Pointer if Resizing is missing
+            }
+
+            // 2. Check for Window Controls (Buttons)
+            let left_anchor = Point::new(rect.x, rect.y);
+            let right_anchor = Point::new(rect.x + rect.width, rect.y);
+            if self.window_controls.hit_test(pos, left_anchor, right_anchor, ui::style::Style::BUTTON_SIZE).is_some() {
+                return mouse::Interaction::Pointer;
+            }
+
+            // 3. Check for Hamburger Menu items
+            if self.hamburger_menu.is_open && self.hamburger_menu.hit_test(pos, left_anchor, 300.0) {
+                return mouse::Interaction::Pointer;
+            }
+
+            // 4. Check for draggable window area
+            if rect.contains(pos) {
+                return if self.is_dragging { mouse::Interaction::Grabbing } else { mouse::Interaction::Grab };
+            }
+        }
+        mouse::Interaction::default()
+    }
 }
 
 impl App {
