@@ -7,8 +7,8 @@ theme = "NeonCyber"
 glow_active = true
 
 [physics]
-breathe = true
-magnetic = true
+breathe = false
+magnetic = false
 reduce_motion = false
 
 [a11y]

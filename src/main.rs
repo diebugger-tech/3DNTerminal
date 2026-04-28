@@ -873,6 +873,7 @@ impl App {
     }
 
     fn execute_button_action(&mut self, action: ui::window_controls::ButtonAction) -> Task<Message> {
+        tracing::debug!("Executing button action: {:?}", action);
         match action {
             ui::window_controls::ButtonAction::Minimize => {
                 return self.core.minimize(None);
@@ -899,8 +900,13 @@ impl App {
                 self.action_flash = 1.0;
             }
             ui::window_controls::ButtonAction::Resize => {
+                tracing::info!("Action: Resize button clicked");
+                if self.phase == AnimationPhase::Hidden || self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Collapsing {
+                    self.phase = AnimationPhase::Expanding;
+                    self.active_corner = CornerPosition::Free;
+                    self.progress = 0.0;
+                }
                 self.is_resizing = !self.is_resizing;
-                tracing::info!("Resize mode: {}", self.is_resizing);
                 self.action_flash = 0.5;
             }
             ui::window_controls::ButtonAction::Close => {
