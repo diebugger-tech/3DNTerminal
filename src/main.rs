@@ -360,7 +360,15 @@ impl Application for App {
                     }
                 }
                 
-                // 6. Notification expiry (3 seconds)
+                // 6. Auto-Close Menus if window is not expanded or too small
+                let is_too_small = self.center_rect.width < 500.0 || self.center_rect.height < 400.0;
+                if (self.phase != AnimationPhase::Expanded || is_too_small) && (self.hamburger_menu.is_open || self.active_overlay != OverlayMode::None) {
+                    self.hamburger_menu.is_open = false;
+                    self.active_overlay = OverlayMode::None;
+                    needs_redraw = true;
+                }
+
+                // 7. Notification expiry (3 seconds)
                 if let Some((_, start)) = self.notification {
                     if start.elapsed().as_secs_f32() > 3.0 {
                         self.notification = None;
