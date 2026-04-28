@@ -10,6 +10,7 @@ pub enum OverlayMode {
     Search,
     Shortcuts,
     A11y,
+    Security,
 }
 
 impl OverlayMode {
@@ -22,6 +23,7 @@ impl OverlayMode {
             Self::Search => "SEARCH TERMINAL",
             Self::Shortcuts => "KEYBOARD SHORTCUTS",
             Self::A11y => "ACCESSIBILITY",
+            Self::Security => "SECURITY & FIREWALL",
         }
     }
 
@@ -30,7 +32,7 @@ impl OverlayMode {
             Self::Settings | Self::Physics => Color::from_rgba(1.0, 0.6, 0.0, 1.0), // Orange/Amber
             Self::Themes => Color::from_rgba(0.0, 1.0, 0.8, 1.0),                   // Cyan
             Self::Search | Self::Shortcuts => Color::from_rgba(0.0, 0.8, 1.0, 1.0), // Blue
-            Self::A11y => Color::from_rgba(0.4, 1.0, 0.8, 1.0),                   // Cyan/Teal
+            Self::A11y | Self::Security => Color::from_rgba(0.4, 1.0, 0.8, 1.0),    // Cyan/Teal
             _ => Color::WHITE,
         }
     }

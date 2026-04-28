@@ -54,6 +54,7 @@ impl TerminalSkill for ThemesSkill {
             let chip_x = rect.x + 20.0 + (i as f32 * 90.0);
             let chip_rect = Rectangle::new(Point::new(chip_x, y_start), Size::new(80.0, 30.0));
             if chip_rect.contains(pos) {
+                tracing::info!("ThemesSkill: Selected theme {:?}", theme);
                 config.theme = *theme;
                 config.neon_color = theme.color();
                 return true;

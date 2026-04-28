@@ -163,7 +163,8 @@ impl App {
             neon_color: self.config.neon_color,
         };
         let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
-        let btn_size = (rect.width * 0.03).clamp(12.0, 26.0);
+        // Use the same button size as in two_d.rs rendering (Style::BUTTON_SIZE)
+        let btn_size = ui::style::Style::BUTTON_SIZE;
         let left_anchor = Point::new(rect.x, rect.y);
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
         
@@ -409,7 +410,7 @@ impl Application for App {
                     // 0. Check if Overlay is open and handle close
                     if self.active_overlay != OverlayMode::None {
                         let settings_w = 400.0;
-                        let settings_h = 320.0;
+                        let settings_h = 350.0; // Must match overlay_h in two_d.rs exactly
                         let settings_rect = Rectangle {
                             x: self.center_rect.x + (self.center_rect.width - settings_w) / 2.0,
                             y: self.center_rect.y + (self.center_rect.height - settings_h) / 2.0,
@@ -437,6 +438,7 @@ impl Application for App {
                         if let Some(id) = active_skill_id {
                             if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
                                 if skill.on_click(pos, settings_rect, &mut self.config) {
+                                    self.action_flash = 1.0; // Visual feedback
                                     self.cache.clear();
                                     return Task::none();
                                 }
@@ -447,27 +449,6 @@ impl Application for App {
                             self.active_overlay = OverlayMode::None;
                             self.cache.clear();
                             return Task::none();
-                        }
-
-                        // Theme Picker Interaction
-                        if self.active_overlay == OverlayMode::Themes {
-                            let y_start = settings_rect.y + 120.0;
-                            for (i, theme) in [
-                                crate::config::TerminalTheme::Amber,
-                                crate::config::TerminalTheme::Magenta,
-                                crate::config::TerminalTheme::Cyan,
-                                crate::config::TerminalTheme::Green,
-                            ].iter().enumerate() {
-                                let chip_x = settings_rect.x + 20.0 + (i as f32 * 90.0);
-                                let chip_rect = Rectangle::new(Point::new(chip_x, y_start), Size::new(80.0, 30.0));
-                                if chip_rect.contains(pos) {
-                                    self.config.theme = *theme;
-                                    self.config.neon_color = theme.color();
-                                    self.action_flash = 1.0;
-                                    self.cache.clear();
-                                    return Task::none();
-                                }
-                            }
                         }
                         return Task::none();
                     }
@@ -552,7 +533,7 @@ impl Application for App {
                         let menu_x = rect.x + 5.0;
                         let menu_y = rect.y + 45.0;
                         let menu_w = 280.0;
-                        let menu_h = 420.0;
+                        let menu_h = 500.0;
                         
                         if pos.x >= menu_x && pos.x <= menu_x + menu_w {
                             let rel_y = pos.y - menu_y;
@@ -630,6 +611,7 @@ impl Application for App {
                             "physics" => OverlayMode::Physics,
                             "themes" => OverlayMode::Themes,
                             "a11y" => OverlayMode::A11y,
+                            "security" => OverlayMode::Security,
                             _ => OverlayMode::None,
                         };
                         self.active_overlay = if self.active_overlay == overlay { OverlayMode::None } else { overlay };

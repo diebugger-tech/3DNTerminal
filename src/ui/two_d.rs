@@ -195,7 +195,7 @@ pub fn draw(
         let menu_x = rect.x + 5.0;
         let menu_y = rect.y + 45.0;
         let menu_w = 280.0;
-        let menu_h = 420.0;
+        let menu_h = 500.0;
 
         let menu_path = Path::rectangle(Point::new(menu_x, menu_y), Size::new(menu_w, menu_h));
         frame.fill(&menu_path, Color::from_rgba(Style::BG_DARK.r, Style::BG_DARK.g, Style::BG_DARK.b, 0.95 * alpha));
