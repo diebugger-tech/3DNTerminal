@@ -25,6 +25,19 @@ use std::time::{Instant, Duration};
 
 // EffectEngine removed as requested - running directly on desktop
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ResizeDirection {
+    None,
+    Left,
+    Right,
+    Top,
+    Bottom,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
 pub struct App {
     core: Core,
     cache: Cache,
@@ -54,7 +67,8 @@ pub struct App {
     last_corner: CornerPosition,
     is_dragging: bool,
     is_resizing: bool,
-    is_corner_resizing: bool, // Direct corner drag
+    is_corner_resizing: bool,
+    resize_direction: ResizeDirection,
     drag_start_pos: Point,
     hovered_action: Option<ui::window_controls::ButtonAction>,
     active_button: Option<ui::window_controls::ButtonAction>,
@@ -151,14 +165,15 @@ impl canvas::Program<Message, Theme> for App {
         if let Some(pos) = cursor.position_in(_bounds) {
             let (rect, _) = ui::two_d::calculate_geometry(&self.params());
             
-            // 1. Check for Resize Grip (Bottom Right)
-            let grip_size = 30.0;
-            let grip_rect = Rectangle::new(
-                Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
-                Size::new(grip_size, grip_size)
-            );
-            if grip_rect.contains(pos) {
-                return mouse::Interaction::Pointer; // Fallback to Pointer if Resizing is missing
+            // 1. Check for Resize Edges & Corners
+            let margin = 10.0;
+            let on_l = pos.x >= rect.x - margin && pos.x <= rect.x + margin;
+            let on_r = pos.x >= rect.x + rect.width - margin && pos.x <= rect.x + rect.width + margin;
+            let on_t = pos.y >= rect.y - margin && pos.y <= rect.y + margin;
+            let on_b = pos.y >= rect.y + rect.height - margin && pos.y <= rect.y + rect.height + margin;
+
+            if on_l || on_r || on_t || on_b {
+                return mouse::Interaction::Pointer; // Visual indicator for resize zone
             }
 
             // 2. Check for Window Controls (Buttons)
@@ -262,6 +277,7 @@ impl Application for App {
             is_dragging: false,
             is_resizing: false,
             is_corner_resizing: false,
+            resize_direction: ResizeDirection::None,
             drag_start_pos: Point::ORIGIN,
             hovered_action: None,
             active_button: None,
@@ -515,13 +531,37 @@ impl Application for App {
                 
                 let effective_pos = self.cursor_pos;
                 if self.is_corner_resizing {
-                    let (rect, _) = ui::two_d::calculate_geometry(&self.params());
-                    let new_w = (effective_pos.x - rect.x).max(300.0);
-                    let new_h = (effective_pos.y - rect.y).max(200.0);
-                    self.center_rect.width = new_w;
-                    self.center_rect.height = new_h;
-                    self.config.saved_width = new_w;
-                    self.config.saved_height = new_h;
+                    let min_w = 300.0;
+                    let min_h = 200.0;
+                    
+                    match self.resize_direction {
+                        ResizeDirection::Right | ResizeDirection::BottomRight | ResizeDirection::TopRight => {
+                            self.center_rect.width = (effective_pos.x - self.center_rect.x).max(min_w);
+                        }
+                        ResizeDirection::Left | ResizeDirection::BottomLeft | ResizeDirection::TopLeft => {
+                            let old_right = self.center_rect.x + self.center_rect.width;
+                            let new_x = effective_pos.x.min(old_right - min_w);
+                            self.center_rect.width = old_right - new_x;
+                            self.center_rect.x = new_x;
+                        }
+                        _ => {}
+                    }
+
+                    match self.resize_direction {
+                        ResizeDirection::Bottom | ResizeDirection::BottomRight | ResizeDirection::BottomLeft => {
+                            self.center_rect.height = (effective_pos.y - self.center_rect.y).max(min_h);
+                        }
+                        ResizeDirection::Top | ResizeDirection::TopRight | ResizeDirection::TopLeft => {
+                            let old_bottom = self.center_rect.y + self.center_rect.height;
+                            let new_y = effective_pos.y.min(old_bottom - min_h);
+                            self.center_rect.height = old_bottom - new_y;
+                            self.center_rect.y = new_y;
+                        }
+                        _ => {}
+                    }
+
+                    self.config.saved_width = self.center_rect.width;
+                    self.config.saved_height = self.center_rect.height;
                     self.cache.clear();
                 } else if self.is_dragging {
                     let delta_x = effective_pos.x - self.drag_start_pos.x;
@@ -553,25 +593,33 @@ impl Application for App {
                     self.active_button = on_button;
                     self.pressed_in_menu = on_menu;
 
-                    if on_button.is_some() || on_menu || self.active_overlay != OverlayMode::None {
-                        return Task::none();
-                    }
+                    // Check for Resize Edges & Corners (All 4 sides)
+                    let m = 12.0;
+                    let on_l = effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + m;
+                    let on_r = effective_pos.x >= rect.x + rect.width - m && effective_pos.x <= rect.x + rect.width + m;
+                    let on_t = effective_pos.y >= rect.y - m && effective_pos.y <= rect.y + m;
+                    let on_b = effective_pos.y >= rect.y + rect.height - m && effective_pos.y <= rect.y + rect.height + m;
 
-                    // Check for Corner-Grip (Bottom Right)
-                    let grip_size = 30.0;
-                    let grip_rect = Rectangle::new(
-                        Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
-                        Size::new(grip_size, grip_size)
-                    );
-                    if grip_rect.contains(effective_pos) {
-                        // Unpin from corner if resizing starts
+                    if on_l || on_r || on_t || on_b {
                         if self.active_corner != CornerPosition::Free {
                             self.active_corner = CornerPosition::Free;
                             self.phase = AnimationPhase::Expanded;
                             self.progress = 1.0;
+                            self.center_rect = rect;
                         }
                         self.is_corner_resizing = true;
+                        
+                        self.resize_direction = if on_l && on_t { ResizeDirection::TopLeft }
+                            else if on_r && on_t { ResizeDirection::TopRight }
+                            else if on_l && on_b { ResizeDirection::BottomLeft }
+                            else if on_r && on_b { ResizeDirection::BottomRight }
+                            else if on_l { ResizeDirection::Left }
+                            else if on_r { ResizeDirection::Right }
+                            else if on_t { ResizeDirection::Top }
+                            else { ResizeDirection::Bottom };
+
                         self.drag_start_pos = effective_pos;
+                        self.cache.clear();
                         return Task::none();
                     }
 
@@ -671,6 +719,7 @@ impl Application for App {
                     
                     if self.is_corner_resizing {
                         self.is_corner_resizing = false;
+                        self.resize_direction = ResizeDirection::None;
                         let _ = self.config.save("config.toml");
                         return Task::none();
                     }
