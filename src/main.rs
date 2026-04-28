@@ -722,6 +722,9 @@ impl Application for App {
             }
             Message::ToggleHamburger => {
                 self.hamburger_menu.is_open = !self.hamburger_menu.is_open;
+                if !self.hamburger_menu.is_open {
+                    self.active_overlay = OverlayMode::None;
+                }
                 tracing::info!("Message: ToggleHamburger -> {}", self.hamburger_menu.is_open);
                 self.cache.clear();
             }
@@ -746,7 +749,7 @@ impl Application for App {
                     // 1. Sidebar/Menu Handling
                     if self.pressed_in_menu && self.hamburger_menu.is_open {
                         let menu_h = (rect.height - 50.0).max(100.0); // Dynamic Height (Nr. 4)
-                        if let Some(action) = self.hamburger_menu.on_click(effective_pos, left_anchor, menu_h, &self.skills) {
+                        if let Some(action) = self.hamburger_menu.on_click(effective_pos, left_anchor, menu_h, &self.skills, self.config.power_user_mode) {
                             self.pressed_in_menu = false;
                             self.active_button = None;
                             let msg = match action {
