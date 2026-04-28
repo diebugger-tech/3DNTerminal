@@ -325,13 +325,18 @@ impl Application for App {
             }
             Message::KeyPressed(key, modifiers, _text) => {
                 tracing::debug!("KeyPressed: {:?} (mods: {:?})", key, modifiers);
+                
+                // Flip key logic (Toggle Expand/Collapse)
                 if key == self.config.flip_key {
                     let old_phase = self.phase;
-                    if self.phase == AnimationPhase::Collapsed {
+                    if self.phase == AnimationPhase::Collapsed || self.phase == AnimationPhase::Hidden {
                         self.phase = AnimationPhase::Expanding;
+                        self.active_corner = CornerPosition::Free;
                         self.progress = 0.0;
                     } else if self.phase == AnimationPhase::Expanded {
                         self.phase = AnimationPhase::Collapsing;
+                        self.active_corner = self.last_corner;
+                        self.corner_rect = self.active_corner.corner_rect(self.window_width, self.window_height);
                         self.progress = 0.0;
                     }
                     tracing::info!("FlipKey Triggered: {:?} -> {:?}", old_phase, self.phase);
@@ -339,6 +344,58 @@ impl Application for App {
                     return Task::none();
                 }
 
+                // Corner jumping with arrow keys (Only if not expanded)
+                if self.phase != AnimationPhase::Expanded {
+                    use cosmic::iced::keyboard::Key;
+                    
+                    let new_corner = match key {
+                        Key::Named(keyboard::key::Named::ArrowUp) => {
+                            match self.active_corner {
+                                CornerPosition::BottomLeft => Some(CornerPosition::TopLeft),
+                                CornerPosition::BottomRight => Some(CornerPosition::TopRight),
+                                _ => None,
+                            }
+                        }
+                        Key::Named(keyboard::key::Named::ArrowDown) => {
+                            match self.active_corner {
+                                CornerPosition::TopLeft => Some(CornerPosition::BottomLeft),
+                                CornerPosition::TopRight => Some(CornerPosition::BottomRight),
+                                _ => None,
+                            }
+                        }
+                        Key::Named(keyboard::key::Named::ArrowLeft) => {
+                            match self.active_corner {
+                                CornerPosition::TopRight => Some(CornerPosition::TopLeft),
+                                CornerPosition::BottomRight => Some(CornerPosition::BottomLeft),
+                                _ => None,
+                            }
+                        }
+                        Key::Named(keyboard::key::Named::ArrowRight) => {
+                            match self.active_corner {
+                                CornerPosition::TopLeft => Some(CornerPosition::TopRight),
+                                CornerPosition::BottomLeft => Some(CornerPosition::BottomRight),
+                                _ => None,
+                            }
+                        }
+                        _ => None,
+                    };
+
+                    if let Some(nc) = new_corner {
+                        if nc != self.active_corner {
+                            tracing::info!("Corner Jump: {:?} -> {:?}", self.active_corner, nc);
+                            self.active_corner = nc;
+                            self.corner_rect = nc.corner_rect(self.window_width, self.window_height);
+                            // If we were hidden, showing it in the new corner
+                            if self.phase == AnimationPhase::Hidden {
+                                self.phase = AnimationPhase::Collapsed;
+                            }
+                            self.cache.clear();
+                            return Task::none();
+                        }
+                    }
+                }
+
+                // If expanded, send key to terminal
                 if self.phase == AnimationPhase::Expanded {
                     self.terminal_engine.send_key(&key, modifiers, &self.config);
                 }
