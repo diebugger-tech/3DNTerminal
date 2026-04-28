@@ -91,6 +91,7 @@ impl canvas::Program<Message, Theme> for App {
                 notification: self.notification.as_ref(),
                 active_overlay: self.active_overlay,
                 skills: &self.skills,
+                glow_active: self.config.glow_active,
                 tabs: &self.tabs,
                 active_tab: self.active_tab,
                 action_flash: self.action_flash,
@@ -153,6 +154,7 @@ impl App {
             notification: self.notification.as_ref(),
             active_overlay: self.active_overlay,
             skills: &self.skills,
+            glow_active: self.config.glow_active,
             tabs: &self.tabs,
             active_tab: self.active_tab,
             action_flash: self.action_flash,
@@ -485,6 +487,7 @@ impl Application for App {
                         notification: self.notification.as_ref(),
                         active_overlay: self.active_overlay,
                         skills: &self.skills,
+                        glow_active: self.config.glow_active,
                         tabs: &self.tabs,
                         active_tab: self.active_tab,
                         action_flash: self.action_flash,
@@ -536,6 +539,7 @@ impl Application for App {
                             notification: self.notification.as_ref(),
                             active_overlay: self.active_overlay,
                             skills: &self.skills,
+                            glow_active: self.config.glow_active,
                             tabs: &self.tabs,
                             active_tab: self.active_tab,
                             action_flash: self.action_flash,
@@ -553,6 +557,23 @@ impl Application for App {
                                 let index = (rel_y / 60.0) as usize;
                                 let items = ui::hamburger_menu::HamburgerMenu::items(params.skills);
                                 if let Some(item) = items.get(index) {
+                                    // NEW: Check for skill menu extension clicks first
+                                    if let ui::hamburger_menu::MenuAction::ExecuteSkill(id) = item.action {
+                                        if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
+                                            let item_y = menu_y + (index as f32 * 60.0);
+                                            let ext_rect = Rectangle {
+                                                x: menu_x + menu_w - 110.0,
+                                                y: item_y + 15.0,
+                                                width: 90.0,
+                                                height: 30.0,
+                                            };
+                                            if skill.on_menu_click(pos, ext_rect, &mut self.config) {
+                                                self.cache.clear();
+                                                return Task::none();
+                                            }
+                                        }
+                                    }
+
                                     self.hamburger_menu.is_open = false; // Auto-close
                                     let msg = match item.action {
                                         ui::hamburger_menu::MenuAction::ExecuteSkill(id) => Message::MenuAction(ui::hamburger_menu::MenuAction::ExecuteSkill(id)),

@@ -33,6 +33,7 @@ pub struct Config {
     pub font_size: f32,
     pub physics_mode: PhysicsMode,
     pub theme: TerminalTheme,
+    pub glow_active: bool,
 }
 
 impl TerminalTheme {
@@ -55,6 +56,7 @@ struct ConfigFile {
     pub neon_color_rgba: Option<[f32; 4]>,
     pub physics_mode: Option<PhysicsMode>,
     pub theme: Option<TerminalTheme>,
+    pub glow_active: Option<bool>,
 }
 
 impl Default for Config {
@@ -69,6 +71,7 @@ impl Default for Config {
             font_size: DEFAULT_FONT_SIZE,
             physics_mode: PhysicsMode::Breathe,
             theme: TerminalTheme::Amber,
+            glow_active: true,
         }
     }
 }

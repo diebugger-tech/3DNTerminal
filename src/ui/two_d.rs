@@ -21,6 +21,7 @@ pub struct TerminalParams<'a> {
     pub notification: Option<&'a (String, Instant)>,
     pub active_overlay: crate::ui::overlay::OverlayMode,
     pub skills: &'a [Box<dyn crate::ui::skill::TerminalSkill>],
+    pub glow_active: bool,
     pub tabs: &'a [String],
     pub active_tab: usize,
     pub action_flash: f32,
@@ -226,6 +227,19 @@ pub fn draw(
                 size: Pixels(12.0),
                 ..Default::default()
             });
+
+            // Draw Skill Extensions (Sliders/Toggles)
+            if let crate::ui::hamburger_menu::MenuAction::ExecuteSkill(id) = item.action {
+                if let Some(skill) = params.skills.iter().find(|s| s.id() == id) {
+                    let ext_rect = Rectangle {
+                        x: menu_x + menu_w - 110.0,
+                        y: item_y + 15.0,
+                        width: 90.0,
+                        height: 30.0,
+                    };
+                    skill.draw_menu_extension(frame, ext_rect, alpha, params);
+                }
+            }
         }
     }
 
