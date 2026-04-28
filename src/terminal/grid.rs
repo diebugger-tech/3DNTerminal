@@ -1,33 +1,6 @@
 use cosmic::iced::Color;
 
-fn color_from_256(id: u8) -> Color {
-    match id {
-        0..=7 => {
-            let r = if id & 1 != 0 { 0.8 } else { 0.0 };
-            let g = if id & 2 != 0 { 0.8 } else { 0.0 };
-            let b = if id & 4 != 0 { 0.8 } else { 0.0 };
-            Color::from_rgb(r, g, b)
-        }
-        8..=15 => {
-            let r = if id & 1 != 0 { 1.0 } else { 0.3 };
-            let g = if id & 2 != 0 { 1.0 } else { 0.3 };
-            let b = if id & 4 != 0 { 1.0 } else { 0.3 };
-            Color::from_rgb(r, g, b)
-        }
-        16..=231 => {
-            let mut val = id - 16;
-            let b = val % 6; val /= 6;
-            let g = val % 6; val /= 6;
-            let r = val % 6;
-            let step = |c| if c == 0 { 0.0 } else { (c as f32 * 40.0 + 55.0) / 255.0 };
-            Color::from_rgb(step(r), step(g), step(b))
-        }
-        232..=255 => {
-            let gray = ((id - 232) as f32 * 10.0 + 8.0) / 255.0;
-            Color::from_rgb(gray, gray, gray)
-        }
-    }
-}
+
 
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {

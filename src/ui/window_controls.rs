@@ -44,14 +44,14 @@ impl WindowControls {
         ]
     }
 
-    pub fn draw(&self, frame: &mut Frame, alpha: f32, anchor: Point, btn_size: f32, active_corner: CornerPosition, cursor_pos: Point) {
+    pub fn draw(&self, frame: &mut Frame, alpha: f32, anchor: Point, btn_size: f32, _active_corner: CornerPosition, cursor_pos: Point) {
         if alpha <= 0.0 { return; }
 
         let by = anchor.y + btn_size * 1.2;
         let cyan = Color::from_rgba(0.4, 1.0, 0.8, alpha);
         let hover_bg = Color::from_rgba(0.4, 1.0, 0.8, alpha * 0.4);
 
-        for (bx, icon, action) in Self::button_positions(anchor, btn_size) {
+        for (bx, icon, _action) in Self::button_positions(anchor, btn_size) {
             let path = Path::rectangle(Point::new(bx, by), Size::new(btn_size, btn_size));
 
             let margin = 2.0;

@@ -38,7 +38,6 @@ pub struct App {
     
     // --- Input State ---
     cursor_pos: Point,
-    last_click_time: Instant,
     cursor_visible: bool,
     
     // Config
@@ -160,7 +159,7 @@ impl Application for App {
         let init_h = 720.0_f32;
         let active_corner = CornerPosition::BottomRight;
         let corner_rect = active_corner.corner_rect(init_w, init_h);
-        let center_rect = Rectangle::new(Point::new(init_w * 0.06, init_h * 0.09), Size::new(init_w * 0.88, init_h * 0.82));
+        let center_rect = Rectangle::new(Point::ORIGIN, Size::new(init_w, init_h));
 
         let app = App {
             core,
@@ -169,7 +168,6 @@ impl Application for App {
             last_update: Instant::now(),
             start_time: Instant::now(),
             cursor_pos: Point::ORIGIN,
-            last_click_time: Instant::now() - Duration::from_secs(10),
             cursor_visible: true,
             cache: Cache::new(),
             phase: AnimationPhase::Expanded,

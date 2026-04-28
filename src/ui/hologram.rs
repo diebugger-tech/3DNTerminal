@@ -105,7 +105,6 @@ pub fn draw(
     let quad = get_quad(params);
     let p1 = quad[0];
     let p2 = quad[1];
-    let p3 = quad[2];
     let p4 = quad[3];
     
     let rad = angle_y.to_radians();
