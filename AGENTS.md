@@ -38,25 +38,29 @@ cargo run --bin wgpu
 ---
 
 ## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: Phase 3 - Modularer Rollout abgeschlossen.
-- **Architektur**: Unified Overlay-System (`OverlayMode`) eingeführt.
+- **Status**: Phase 3 - Skill-Architektur implementiert.
+- **Architektur**: Modularer `TerminalSkill`-Trait für alle internen Module (Physics, Themes, Settings).
 
 ---
 
 ## ✅ BEHOBENE BUGS (PHASE 3)
 
-### Bug 5: Menü-Inkonsistenz
-- **Fix**: Umstellung aller Menüpunkte (Themes, Physics, Search) von unmittelbaren Aktionen auf dedizierte Overlay-Panels.
-- **Zentraler Close**: Alle Overlays teilen sich eine `[ X ]`-Logik und Backdrop-Click zum Schließen.
+### Bug 6: Starre Overlay-Logik
+- **Fix**: Migration von hartcodierten Overlays auf ein dynamisches Skill-System.
+- **Interaktivität**: Support für Toggles und Slider direkt im Hamburger-Menü via `draw_menu_extension`.
 
 ---
 
 ## 🎮 UI-LOGIK (PHASE 3)
 
-### 1. Unified Overlays
-- **Module**: `settings.rs` orchestriert jetzt alle Panel-Inhalte basierend auf `OverlayMode`.
-- **Modi**: Settings, Themes, Physics, Search, Shortcuts.
-- **Design**: Glassmorphism (0.95 Alpha) + Titelfarben-Codierung (Orange/Cyan/Blue).
+### 1. Skill-System (Plugins)
+- **Trait**: `TerminalSkill` definiert `draw_overlay`, `draw_menu_extension` und Klick-Handler.
+- **Dynamik**: Das Hamburger-Menü baut sich automatisch aus allen registrierten Skills in `ui/skills/mod.rs` auf.
+- **Interaktion**: Klicks werden erst an den Skill delegiert (`on_menu_click`), bevor das Menü schließt.
+
+### 2. Unified Overlays
+- **Design**: Alle Skills teilen sich ein Glasmorphism-Overlay (0.95 Alpha).
+- **Control**: Zentrales Schließen via Backdrop oder [ X ] Button.
 
 ### 2. Tabs (+)
 - **Status**: Hit-Test aktiv, Logik-Implementation folgt (Multi-Session).

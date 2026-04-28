@@ -169,17 +169,6 @@ impl App {
     }
 }
 
-impl App {
-    fn get_active_skill(&self) -> Option<&dyn TerminalSkill> {
-        let id = match self.active_overlay {
-            OverlayMode::Settings => "settings",
-            OverlayMode::Physics => "physics",
-            OverlayMode::Themes => "themes",
-            _ => return None,
-        };
-        self.skills.iter().find(|s| s.id() == id).map(|s| s.as_ref())
-    }
-}
 
 impl Application for App {
     type Executor = cosmic::executor::Default;

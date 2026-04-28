@@ -1,7 +1,6 @@
 use cosmic::iced::{Color, Rectangle, Point, Pixels};
 use cosmic::iced::widget::canvas::{Frame, Text};
 use crate::ui::two_d::TerminalParams;
-use crate::config::Config;
 use crate::ui::skill::TerminalSkill;
 
 pub struct PhysicsSkill;
