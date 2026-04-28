@@ -13,7 +13,7 @@
 ---
 
 ## 🛡️ STABILITY MODE (AKTIV)
-- **Status**: Phase 3.6.1 — Adaptive UI Update.
+- **Status**: Phase 3.7 — Deep Theming & Unified Icons.
 - **Security**: 
   - **SecuritySkill** implementiert (AI-Firewall Konzept).
   - **Human-in-the-Loop** Prinzip als Architektur-Standard.
@@ -27,16 +27,17 @@
 
 ## 🎮 UI-LOGIK (PHASE 3)
 
-### 1. Adaptive Navigation
+### 1. Unified Icon System
+- **Konzept**: Themes wie Classic, Apple und Transparent nutzen ausschließlich **Unicode-Symbole** (☰, +, ✕, ↗) für absolute Schärfe und einheitliche Strichstärken.
+- **Hybrid-Engine**: Technische Themes (Blade Runner, Retro) nutzen spezialisierte Vektoren mit themenspezifischen Geometrien (Targeting-Boxen, Brackets).
+
+### 2. Smart UI Management
+- **Auto-Close**: Menüs und Overlays schließen sich automatisch, wenn das Fenster schrumpft oder unter eine kritische Größe (500x400) fällt.
+- **Deep Theming**: Buttons ändern ihre Form (Achteck, Kreis, Klammer) dynamisch basierend auf dem gewählten Skill-Theme.
+
+### 3. Adaptive Navigation & Physics
 - **Corner-Jumping**: Direkter Wechsel zwischen Ecken ohne Zwischenschritt.
-- **Toggle-Expand**: Klick auf die aktuelle Ecke (oder Pfeiltaste in Richtung der Ecke) vergrößert das Fenster.
-- **Dynamic Menu**: Das Hamburger-Menü passt seine Höhe (`menu_h`) dynamisch an die Fensterhöhe an.
-
-### 2. Tremor-Kompensation
-- **Logik**: Low-Pass-Filter in `main.rs` glättet `cursor_pos`.
-
-### 3. Magnetic Focus
-- **Logik**: `lerp_rect` in `math.rs` für organische Fensterbewegung.
+- **Magnetic Focus**: `lerp_rect` in `math.rs` für organische Fensterbewegung.
 
 ---
 

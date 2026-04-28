@@ -5,12 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.6] - 2026-04-28
+## [0.3.7] - 2026-04-28
 ### Added
-- **Advanced A11Y**: Tremor compensation (low-pass filter) and global color blindness filters.
-- **Magnetic Focus**: Physics-based UI that reacts to cursor proximity.
-- **Modular Style System**: Centralized design tokens in `src/ui/style.rs`.
-- **Toggle-Switch Widgets**: Modern sub-menu controls replacing legacy checkboxes.
+- **Unified Unicode Icon System**: High-fidelity icons for Classic/Apple/Transparent themes for perfect visual consistency.
+- **Glass Ghost Theme**: Ultra-transparent mode for immersive desktop integration.
+- **Deep Theming Engine**: Dynamic button geometries (Brackets, Octagons, Circles) that morph based on the active theme.
+- **Smart UI Management**: Auto-close logic for menus and overlays when window is small or collapsing.
+- **Hybrid Arrow Engine**: Mix of clean Unicode arrows and technical vector arrows per theme.
+
+### Changed
+- Improved slider responsiveness and visual feedback in skill menus.
+- Refined typography weights and glow effects for better readability across themes.
+- Updated project documentation (README, AGENTS) to reflect Phase 3.7.
+
+## [0.3.6] - 2026-04-28
 
 ### Changed
 - Refactored `two_d.rs` to use centralized style tokens.
