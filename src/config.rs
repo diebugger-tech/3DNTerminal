@@ -75,6 +75,7 @@ pub enum TerminalTheme {
     DeepSpace,
     RetroAmber,
     BladeRunner,
+    Transparent,
 }
 
 #[derive(Debug, Clone)]
@@ -92,7 +93,7 @@ pub struct Config {
     pub glow_active: bool,
     pub saved_width: f32,
     pub saved_height: f32,
-    pub theme_intensities: [f32; 6],
+    pub theme_intensities: [f32; 7],
 }
 
 impl TerminalTheme {
@@ -104,6 +105,7 @@ impl TerminalTheme {
             Self::DeepSpace => Color::from_rgba(0.5, 0.2, 1.0, 1.0),
             Self::RetroAmber => Color::from_rgba(1.0, 0.6, 0.0, 1.0),
             Self::BladeRunner => Color::from_rgba(0.0, 1.0, 0.83, 1.0), // Starkes Teal
+            Self::Transparent => Color::from_rgba(1.0, 1.0, 1.0, 0.5),
         }
     }
 
@@ -112,6 +114,7 @@ impl TerminalTheme {
             Self::AppleGlass => 0.1,
             Self::DeepSpace => 0.4,
             Self::BladeRunner => 0.15,
+            Self::Transparent => 0.02, // Fast komplett durchsichtig
             _ => 0.25,
         }
     }
@@ -121,6 +124,7 @@ impl TerminalTheme {
             Self::BladeRunner => 3.5,
             Self::DeepSpace => 2.5,
             Self::AppleGlass => 1.2,
+            Self::Transparent => 0.2,
             _ => 1.5,
         }
     }
@@ -133,6 +137,7 @@ impl TerminalTheme {
             Self::RetroAmber => 2.0,
             Self::NeonCyber => 0.0,
             Self::BladeRunner => 4.0,
+            Self::Transparent => 0.0,
         }
     }
 }
@@ -150,7 +155,7 @@ struct ConfigFile {
     pub visuals: Option<VisualsConfig>,
     pub power_user_mode: Option<bool>,
     pub glow_active: Option<bool>,
-    pub theme_intensities: Option<[f32; 6]>,
+    pub theme_intensities: Option<[f32; 7]>,
 }
 
 impl Default for Config {
@@ -171,7 +176,7 @@ impl Default for Config {
             glow_active: true,
             saved_width: 800.0,
             saved_height: 600.0,
-            theme_intensities: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            theme_intensities: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.5],
         }
     }
 }
@@ -265,6 +270,7 @@ impl Config {
                     TerminalTheme::DeepSpace => 3,
                     TerminalTheme::RetroAmber => 4,
                     TerminalTheme::BladeRunner => 5,
+                    TerminalTheme::Transparent => 6,
                 };
                 builder.config.visuals.glow_intensity = builder.config.theme_intensities[idx] * th.glow_intensity();
             }
