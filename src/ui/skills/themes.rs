@@ -161,6 +161,7 @@ impl TerminalSkill for ThemesSkill {
             TerminalTheme::DeepSpace,
             TerminalTheme::RetroAmber,
             TerminalTheme::BladeRunner,
+            TerminalTheme::Transparent,
         ];
 
         for (i, theme) in themes.iter().enumerate() {
@@ -192,6 +193,7 @@ impl TerminalSkill for ThemesSkill {
             TerminalTheme::DeepSpace,
             TerminalTheme::RetroAmber,
             TerminalTheme::BladeRunner,
+            TerminalTheme::Transparent,
         ];
 
         for (i, theme) in themes.iter().enumerate() {
