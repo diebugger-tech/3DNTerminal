@@ -22,6 +22,7 @@ pub struct MenuItem {
     pub label: &'static str,
     pub subtitle: &'static str,
     pub action: MenuAction,
+    pub icon: Option<crate::ui::icons::IconType>,
 }
 
 impl HamburgerMenu {
@@ -40,14 +41,14 @@ impl HamburgerMenu {
                 label: skill.label(),
                 subtitle: skill.subtitle(),
                 action: MenuAction::ExecuteSkill(skill.id()),
+                icon: skill.icon(),
             });
         }
         
         // Add hardcoded global actions at the end
-        menu.push(MenuItem { label: "➕ New Tab", subtitle: "Ollama Chat / System Monitor", action: MenuAction::NewTab });
-        menu.push(MenuItem { label: "🔍 Search", subtitle: "Search Terminal Output", action: MenuAction::SearchOutput });
-
-        menu.push(MenuItem { label: "⌨ Shortcuts", subtitle: "Keybindings & Aliases", action: MenuAction::ShowShortcuts });
+        menu.push(MenuItem { label: "New Tab", subtitle: "Ollama Chat / System Monitor", action: MenuAction::NewTab, icon: Some(crate::ui::icons::IconType::NewTab) });
+        menu.push(MenuItem { label: "Search", subtitle: "Search Terminal Output", action: MenuAction::SearchOutput, icon: Some(crate::ui::icons::IconType::Search) });
+        menu.push(MenuItem { label: "Shortcuts", subtitle: "Keybindings & Aliases", action: MenuAction::ShowShortcuts, icon: Some(crate::ui::icons::IconType::Keyboard) });
         
         menu
     }

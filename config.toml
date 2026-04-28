@@ -2,10 +2,11 @@ max_scrollback = 1000
 blink_interval = 500
 font_size = 14.0
 flip_key_name = "F12"
-neon_color_rgba = [0.4000000059604645, 1.0, 0.800000011920929, 1.0]
-theme = "NeonCyber"
+neon_color_rgba = [0.0, 1.0, 0.4000000059604645, 1.0]
+theme = "Classic"
 power_user_mode = false
 glow_active = true
+theme_intensities = [0.37670716643333435, 0.553067147731781, 0.49741029739379883, 1.0, 1.0, 1.0]
 
 [physics]
 breathe = false
@@ -19,9 +20,5 @@ reduce_motion = 0.0
 
 [visuals]
 enabled = true
-rain_intensity = 0.0
-star_density = 0.0
-scanline_opacity = 0.0
-grid_opacity = 0.0
-glow_intensity = 1.0
+glow_intensity = 0.3013657331466675
 shell_alpha = 0.949999988079071
