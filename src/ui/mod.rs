@@ -10,3 +10,4 @@ pub mod notification;
 pub mod overlay;
 pub mod skill;
 pub mod skills;
+pub mod style;

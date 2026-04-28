@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 use crate::terminal::grid::TerminalGrid;
 use crate::{AnimationPhase, CornerPosition};
 use super::math;
+use super::style::Style;
 
 /// 2D-Optimierte Parameter ohne 3D-Ballast
 pub struct TerminalParams<'a> {
@@ -29,7 +30,6 @@ pub struct TerminalParams<'a> {
     pub neon_color: Color,
 }
 
-/// Reine 2D-Geometrie-Berechnung ohne Rotationswinkel
 pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
     let (mut rect, alpha) = match params.phase {
         AnimationPhase::Collapsed => {
@@ -56,7 +56,6 @@ pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
         AnimationPhase::Hidden => (params.corner_rect, 0.0),
     };
 
-    // Magnetic Focus: Leichter Zug in Richtung Cursor
     if params.physics.magnetic && params.phase == AnimationPhase::Expanded {
         let dist_x = params.cursor_pos.x - (rect.x + rect.width / 2.0);
         let dist_y = params.cursor_pos.y - (rect.y + rect.height / 2.0);
@@ -107,8 +106,7 @@ pub fn draw(
     let filter = params.a11y.color_filter;
     let neon_color = apply_color_filter(params.neon_color, filter);
     
-    // Glassmorphism-Background
-    let bg_color = apply_color_filter(Color::from_rgba(0.02, 0.02, 0.05, 0.92 * alpha), filter);
+    let bg_color = apply_color_filter(Color::from_rgba(Style::BG_DARK.r, Style::BG_DARK.g, Style::BG_DARK.b, 0.92 * alpha), filter);
 
     if matches!(params.phase, AnimationPhase::Hidden) {
         let size = 16.0;
@@ -125,15 +123,12 @@ pub fn draw(
 
     let path = Path::rounded_rectangle(rect.position(), rect.size(), 4.0.into());
 
-    // Hintergrund-Dimming wenn Overlay offen
     if params.active_overlay != crate::ui::overlay::OverlayMode::None {
-        frame.fill(&path, Color::from_rgba(0.0, 0.0, 0.0, 0.4 * alpha));
+        frame.fill(&path, Style::BG_DIM);
     }
 
-    // Hintergrund
     frame.fill(&path, bg_color);
     
-    // Glow-Rahmen
     for i in 1..=4 {
         let glow_width = i as f32 * 2.0;
         let glow_alpha = (0.3 / i as f32) * alpha;
@@ -142,47 +137,40 @@ pub fn draw(
             .with_width(glow_width));
     }
 
-    // Header & Buttons
-    let margin_x = 10.0;
-    let margin_y = 8.0;
-    let font_size = 14.0;
-
     let header_rect = Rectangle::new(
-        Point::new(rect.x + margin_x, rect.y + margin_y),
-        Size::new(rect.width - (margin_x * 2.0), font_size * 1.5)
+        Point::new(rect.x + Style::MARGIN_X, rect.y + Style::MARGIN_Y),
+        Size::new(rect.width - (Style::MARGIN_X * 2.0), Style::HEADER_FONT_SIZE * 1.5)
     );
 
     frame.fill_text(cosmic::iced::widget::canvas::Text {
         content: "3DNTerminal".to_string(),
         position: Point::new(header_rect.x + 35.0, header_rect.y + 12.0),
-        color: apply_color_filter(Color::from_rgba(0.0, 1.0, 0.8, alpha), filter),
-        size: Pixels(font_size),
+        color: apply_color_filter(Style::NEON_CYAN, filter),
+        size: Pixels(Style::HEADER_FONT_SIZE),
         ..Default::default()
     });
 
     if let Some(controls) = params.window_controls {
-        let btn_size = 28.0;
         let left_anchor = Point::new(rect.x, rect.y);
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
-        controls.draw(frame, alpha, left_anchor, right_anchor, btn_size, params.cursor_pos);
+        controls.draw(frame, alpha, left_anchor, right_anchor, Style::BUTTON_SIZE, params.cursor_pos);
     }
 
-    // Grid Rendering
     if let Ok(grid) = grid_mutex.lock() {
-        let start_x = rect.x + margin_x;
-        let start_y = rect.y + margin_y + (font_size * 2.5);
+        let start_x = rect.x + Style::MARGIN_X;
+        let start_y = rect.y + Style::MARGIN_Y + (Style::HEADER_FONT_SIZE * 2.5);
         
         for y in 0..grid.rows {
-            let y_pos = start_y + (y as f32 * 16.0);
-            if y_pos > rect.y + rect.height - margin_y { break; }
+            let y_pos = start_y + (y as f32 * Style::LINE_HEIGHT);
+            if y_pos > rect.y + rect.height - Style::MARGIN_Y { break; }
 
             if let Some(row) = grid.get_visible_row(y) {
                 for (col_idx, cell) in row.iter().enumerate() {
                     frame.fill_text(cosmic::iced::widget::canvas::Text {
                         content: cell.char.to_string(),
-                        position: Point::new(start_x + (col_idx as f32 * 8.0), y_pos),
+                        position: Point::new(start_x + (col_idx as f32 * Style::CHAR_WIDTH), y_pos),
                         color: apply_color_filter(Color::from_rgba(0.9, 0.9, 0.9, alpha), filter),
-                        size: Pixels(13.0),
+                        size: Pixels(Style::TERMINAL_FONT_SIZE),
                         ..Default::default()
                     });
                 }
@@ -190,16 +178,14 @@ pub fn draw(
         }
 
         if params.cursor_visible && alpha > 0.0 {
-            let char_width = 8.0; 
-            let line_height = 16.0;
-            let cursor_x = start_x + (grid.cursor_x as f32 * char_width);
-            let cursor_y = start_y + (grid.cursor_y as f32 * line_height);
+            let cursor_x = start_x + (grid.cursor_x as f32 * Style::CHAR_WIDTH);
+            let cursor_y = start_y + (grid.cursor_y as f32 * Style::LINE_HEIGHT);
             
-            if cursor_x < rect.x + rect.width - margin_x && cursor_y < rect.y + rect.height - margin_y {
+            if cursor_x < rect.x + rect.width - Style::MARGIN_X && cursor_y < rect.y + rect.height - Style::MARGIN_Y {
                 frame.fill_rectangle(
                     Point::new(cursor_x, cursor_y - 12.0),
-                    Size::new(char_width, 14.0),
-                    Color::from_rgba(0.4, 1.0, 0.8, 0.8 * alpha)
+                    Size::new(Style::CHAR_WIDTH, 14.0),
+                    Color::from_rgba(Style::NEON_CYAN.r, Style::NEON_CYAN.g, Style::NEON_CYAN.b, 0.8 * alpha)
                 );
             }
         }
@@ -212,8 +198,8 @@ pub fn draw(
         let menu_h = 420.0;
 
         let menu_path = Path::rectangle(Point::new(menu_x, menu_y), Size::new(menu_w, menu_h));
-        frame.fill(&menu_path, Color::from_rgba(0.02, 0.02, 0.05, 0.95 * alpha));
-        frame.stroke(&menu_path, Stroke::default().with_color(apply_color_filter(Color::from_rgba(1.0, 0.6, 0.0, 0.4 * alpha), filter)).with_width(1.5));
+        frame.fill(&menu_path, Color::from_rgba(Style::BG_DARK.r, Style::BG_DARK.g, Style::BG_DARK.b, 0.95 * alpha));
+        frame.stroke(&menu_path, Stroke::default().with_color(apply_color_filter(Style::NEON_ORANGE, filter)).with_width(1.5));
 
         let items = crate::ui::hamburger_menu::HamburgerMenu::items(params.skills);
         for (i, item) in items.iter().enumerate() {
@@ -222,13 +208,13 @@ pub fn draw(
                           && params.cursor_pos.y >= item_y && params.cursor_pos.y <= item_y + 60.0;
             
             if is_hovered {
-                frame.fill(&Path::rectangle(Point::new(menu_x, item_y), Size::new(menu_w, 60.0)), apply_color_filter(Color::from_rgba(1.0, 0.6, 0.0, 0.1 * alpha), filter));
+                frame.fill(&Path::rectangle(Point::new(menu_x, item_y), Size::new(menu_w, 60.0)), apply_color_filter(Color::from_rgba(Style::NEON_ORANGE.r, Style::NEON_ORANGE.g, Style::NEON_ORANGE.b, 0.1 * alpha), filter));
             }
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.label.to_string(),
                 position: Point::new(menu_x + 15.0, item_y + 25.0),
-                color: apply_color_filter(Color::from_rgba(1.0, 0.8, 0.2, alpha), filter),
+                color: apply_color_filter(Style::NEON_YELLOW, filter),
                 size: Pixels(18.0),
                 ..Default::default()
             });
@@ -236,7 +222,7 @@ pub fn draw(
             frame.fill_text(cosmic::iced::widget::canvas::Text {
                 content: item.subtitle.to_string(),
                 position: Point::new(menu_x + 15.0, item_y + 45.0),
-                color: apply_color_filter(Color::from_rgba(1.0, 0.6, 0.0, 0.6 * alpha), filter),
+                color: apply_color_filter(Color::from_rgba(Style::NEON_ORANGE.r, Style::NEON_ORANGE.g, Style::NEON_ORANGE.b, 0.6 * alpha), filter),
                 size: Pixels(12.0),
                 ..Default::default()
             });
