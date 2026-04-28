@@ -87,6 +87,7 @@ impl canvas::Program<Message, Theme> for App {
                 active_corner: self.active_corner,
                 cursor_pos: self.cursor_pos,
                 physics: self.config.physics,
+                a11y: self.config.a11y,
                 hamburger_open: self.hamburger_menu.is_open,
                 notification: self.notification.as_ref(),
                 active_overlay: self.active_overlay,
@@ -150,6 +151,7 @@ impl App {
             active_corner: self.active_corner,
             cursor_pos: self.cursor_pos,
             physics: self.config.physics,
+            a11y: self.config.a11y,
             hamburger_open: self.hamburger_menu.is_open,
             notification: self.notification.as_ref(),
             active_overlay: self.active_overlay,
@@ -377,16 +379,25 @@ impl Application for App {
                 self.cache.clear();
             }
             Message::CursorMoved(pos) => {
-                self.cursor_pos = pos;
+                let damping = self.config.a11y.tremor_damping;
+                if damping > 0.01 {
+                    let t = 1.0 - (damping * 0.9); // Max damping = 0.1 response
+                    self.cursor_pos.x += (pos.x - self.cursor_pos.x) * t;
+                    self.cursor_pos.y += (pos.y - self.cursor_pos.y) * t;
+                } else {
+                    self.cursor_pos = pos;
+                }
+                
+                let effective_pos = self.cursor_pos;
                 if self.is_dragging {
-                    let delta_x = pos.x - self.drag_start_pos.x;
-                    let delta_y = pos.y - self.drag_start_pos.y;
+                    let delta_x = effective_pos.x - self.drag_start_pos.x;
+                    let delta_y = effective_pos.y - self.drag_start_pos.y;
                     self.center_rect.x += delta_x;
                     self.center_rect.y += delta_y;
-                    self.drag_start_pos = pos;
+                    self.drag_start_pos = effective_pos;
                     self.cache.clear();
                 } else {
-                    let current_action = self.current_hit_test(pos);
+                    let current_action = self.current_hit_test(effective_pos);
                     if current_action != self.hovered_action {
                         self.hovered_action = current_action;
                         self.cache.clear();
@@ -419,6 +430,7 @@ impl Application for App {
                             OverlayMode::Settings => Some("settings"),
                             OverlayMode::Physics => Some("physics"),
                             OverlayMode::Themes => Some("themes"),
+                            OverlayMode::A11y => Some("a11y"),
                             _ => None,
                         };
 
@@ -472,6 +484,7 @@ impl Application for App {
                         active_corner: self.active_corner,
                         cursor_pos: pos,
                         physics: self.config.physics,
+                        a11y: self.config.a11y,
                         hamburger_open: self.hamburger_menu.is_open,
                         notification: self.notification.as_ref(),
                         active_overlay: self.active_overlay,
@@ -524,6 +537,7 @@ impl Application for App {
                             active_corner: self.active_corner,
                             cursor_pos: pos,
                             physics: self.config.physics,
+                            a11y: self.config.a11y,
                             hamburger_open: true,
                             notification: self.notification.as_ref(),
                             active_overlay: self.active_overlay,
@@ -615,6 +629,7 @@ impl Application for App {
                             "settings" => OverlayMode::Settings,
                             "physics" => OverlayMode::Physics,
                             "themes" => OverlayMode::Themes,
+                            "a11y" => OverlayMode::A11y,
                             _ => OverlayMode::None,
                         };
                         self.active_overlay = if self.active_overlay == overlay { OverlayMode::None } else { overlay };

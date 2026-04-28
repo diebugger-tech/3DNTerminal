@@ -17,6 +17,7 @@ pub struct TerminalParams<'a> {
     pub active_corner: CornerPosition,
     pub cursor_pos: Point,
     pub physics: crate::config::PhysicsConfig,
+    pub a11y: crate::config::A11yConfig,
     pub hamburger_open: bool,
     pub notification: Option<&'a (String, Instant)>,
     pub active_overlay: crate::ui::overlay::OverlayMode,
@@ -33,9 +34,11 @@ pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
     match params.phase {
         AnimationPhase::Collapsed => {
             // Ein leichtes Schweben in der Ecke als 2D-Effekt
-            let hover = if params.physics.breathe && !params.physics.reduce_motion {
+            let is_static = params.physics.reduce_motion || params.a11y.reduce_motion > 0.8;
+            let hover = if params.physics.breathe && !is_static {
                 let time = params.start_time.elapsed().as_secs_f32();
-                (time * 2.0).sin() * 4.0
+                let strength = 1.0 - params.a11y.reduce_motion;
+                (time * 2.0).sin() * 4.0 * strength
             } else {
                 0.0
             };
@@ -60,6 +63,34 @@ pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
             (rect, alpha)
         }
         AnimationPhase::Hidden => (params.corner_rect, 0.0),
+    }
+}
+
+pub fn apply_color_filter(color: Color, filter: crate::config::ColorFilter) -> Color {
+    use crate::config::ColorFilter;
+    match filter {
+        ColorFilter::None => color,
+        ColorFilter::Protanopia => {
+            // Simplified Protanopia (red deficiency)
+            let r = color.r * 0.567 + color.g * 0.433;
+            let g = color.r * 0.558 + color.g * 0.442;
+            let b = color.g * 0.242 + color.b * 0.758;
+            Color::from_rgb(r, g, b)
+        }
+        ColorFilter::Deuteranopia => {
+            // Simplified Deuteranopia (green deficiency)
+            let r = color.r * 0.625 + color.g * 0.375;
+            let g = color.r * 0.7 + color.g * 0.3;
+            let b = color.g * 0.3 + color.b * 0.7;
+            Color::from_rgb(r, g, b)
+        }
+        ColorFilter::Tritanopia => {
+            // Simplified Tritanopia (blue deficiency)
+            let r = color.r * 0.95 + color.g * 0.05;
+            let g = color.g * 0.433 + color.b * 0.567;
+            let b = color.g * 0.475 + color.b * 0.525;
+            Color::from_rgb(r, g, b)
+        }
     }
 }
 
@@ -227,23 +258,29 @@ pub fn draw(
                 ..Default::default()
             });
 
-            // Draw Skill Extensions (Sliders/Toggles)
-            if let crate::ui::hamburger_menu::MenuAction::ExecuteSkill(id) = item.action {
-                if let Some(skill) = params.skills.iter().find(|s| s.id() == id) {
-                    let ext_rect = Rectangle {
-                        x: menu_x + menu_w - 110.0,
-                        y: item_y + 15.0,
-                        width: 90.0,
-                        height: 30.0,
-                    };
-                    skill.draw_menu_extension(frame, ext_rect, alpha, params);
-                }
-            }
         }
     }
 
-    // Modularer Settings Aufruf (kann jetzt mehrere Overlays handhaben)
-    crate::ui::settings::draw(frame, rect, alpha, params);
+    // Modularer Skill Overlay Aufruf
+    if params.active_overlay != crate::ui::overlay::OverlayMode::None {
+        let overlay_id = match params.active_overlay {
+            crate::ui::overlay::OverlayMode::Settings => "settings",
+            crate::ui::overlay::OverlayMode::Physics => "physics",
+            crate::ui::overlay::OverlayMode::Themes => "themes",
+            crate::ui::overlay::OverlayMode::A11y => "a11y",
+            _ => "",
+        };
+
+        if let Some(skill) = params.skills.iter().find(|s| s.id() == overlay_id) {
+            let overlay_w = 400.0;
+            let overlay_h = 350.0;
+            let overlay_rect = Rectangle::new(
+                Point::new(rect.x + (rect.width - overlay_w) / 2.0, rect.y + (rect.height - overlay_h) / 2.0),
+                Size::new(overlay_w, overlay_h)
+            );
+            skill.draw_overlay(frame, overlay_rect, alpha, params);
+        }
+    }
 
     // Modularer Notification Aufruf
     crate::ui::notification::draw(frame, rect, alpha, params);

@@ -8,10 +8,11 @@ A floating, translucent terminal built with Rust and libcosmic, designed for the
 
 - **Holographic Rendering**: Translucent UI with neon glow and organic "Breathe" animation.
 - **Modular Skill System**: Extensible architecture for themes, physics, and settings.
-- **Interactive Physics**: 
-  - **Breathe**: Organic sinus-hover in corner states.
-  - **A11Y Mode**: Integrated "Reduce Motion" master switch.
-  - **Magnetic Focus**: (In progress) Buttons react to cursor proximity.
+- **Advanced A11Y**: 
+  - **Tremor Compensation**: Low-pass filter for smooth cursor interaction.
+  - **Color Filters**: Real-time transformations for Protanopia, Deuteranopia, and Tritanopia.
+  - **Motion Reduction**: Granular control over animation damping.
+- **Fine-grained Physics**: Individual dashboards for Breathe intensity and Magnetic radius.
 - **Adaptive Layout**: Snaps to all four screen corners with smooth 3D transitions.
 - **Multi-Session**: Tab-based terminal sessions.
 - **Wayland Native**: Built on iced and libcosmic for modern Linux desktops.
@@ -20,8 +21,8 @@ A floating, translucent terminal built with Rust and libcosmic, designed for the
 
 3DNTerminal follows a modular **Skill-based architecture**:
 - **Core**: Handles PTY, grid rendering, and window state.
-- **Skills**: Pluggable modules (Settings, Physics, Themes) that extend the UI and logic.
-- **Hamburger Menu**: A dynamic control center that automatically integrates all registered skills.
+- **Skills**: Pluggable modules (Settings, Physics, Themes, A11Y) that extend the UI and logic.
+- **Navigation**: The Hamburger menu acts as a starter, while Skill Overlays provide detailed control dashboards.
 
 ## Installation
 
@@ -33,22 +34,6 @@ A floating, translucent terminal built with Rust and libcosmic, designed for the
 ```bash
 nix develop
 cargo run --bin 3dnterm
-```
-
-## Keybindings
-- **F12**: Toggle between Expanded (Center) and Collapsed (Corner) modes.
-- **Minimize (−)**: Dock to system bar.
-- **Maximize (□)**: Toggle center/corner.
-- **Arrows (↖ ↗ ↙ ↘)**: Jump to specific corners.
-
-## Configuration
-Config is stored in `~/.config/3dnterminal/config.toml`.
-Example `[physics]` section:
-```toml
-[physics]
-breathe = true
-magnetic = true
-reduce_motion = false
 ```
 
 ## License

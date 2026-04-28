@@ -25,6 +25,31 @@ impl Default for PhysicsConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum ColorFilter {
+    #[default] None,
+    Protanopia,
+    Deuteranopia,
+    Tritanopia,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct A11yConfig {
+    pub tremor_damping: f32, // 0.0 to 1.0
+    pub color_filter: ColorFilter,
+    pub reduce_motion: f32,  // 0.0 to 1.0 (override for speed/physics)
+}
+
+impl Default for A11yConfig {
+    fn default() -> Self {
+        Self {
+            tremor_damping: 0.0,
+            color_filter: ColorFilter::None,
+            reduce_motion: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum TerminalTheme {
     #[default]
     Amber,
@@ -41,6 +66,7 @@ pub struct Config {
     pub flip_key: Key,
     pub font_size: f32,
     pub physics: PhysicsConfig,
+    pub a11y: A11yConfig,
     pub theme: TerminalTheme,
     pub glow_active: bool,
 }
@@ -64,6 +90,7 @@ struct ConfigFile {
     pub flip_key_name: Option<String>,
     pub neon_color_rgba: Option<[f32; 4]>,
     pub physics: Option<PhysicsConfig>,
+    pub a11y: Option<A11yConfig>,
     pub theme: Option<TerminalTheme>,
     pub glow_active: Option<bool>,
 }
@@ -79,6 +106,7 @@ impl Default for Config {
             flip_key: Key::Named(Named::F12),
             font_size: DEFAULT_FONT_SIZE,
             physics: PhysicsConfig::default(),
+            a11y: A11yConfig::default(),
             theme: TerminalTheme::Amber,
             glow_active: true,
         }
@@ -162,6 +190,7 @@ impl Config {
                 // Expand key mapping later
             }
             if let Some(p) = parsed.physics { builder.config.physics = p; }
+            if let Some(a) = parsed.a11y { builder.config.a11y = a; }
             if let Some(th) = parsed.theme { 
                 builder.config.theme = th;
                 builder.config.neon_color = th.color();

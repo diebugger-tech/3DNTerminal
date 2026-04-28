@@ -2,17 +2,21 @@
 
 ---
 
-## Bereits implementierte Physik (v0.3.5)
+## Bereits implementierte Physik (v0.3.6)
 
-### Modular Physics (Neu)
-Alle Effekte sind nun einzeln schaltbar über den `PhysicsSkill` im Hamburger-Menü.
+### Granular Physics Dashboard (Neu)
+Alle Effekte haben nun Schieberegler (Slider) und Toggles in ihrem jeweiligen Skill-Overlay.
+
+### Tremor-Kompensation (Neu)
+Low-Pass-Filter für die Mausbewegung zur Unterstützung von Menschen mit motorischen Beeinträchtigungen.
+- Status: ✅ Implementiert (Modular schaltbar in A11Y)
 
 ### Breathe-Physik (Sinus-Hover)
 Organisches Schweben im Collapsed-State via Sinus-Welle. 
-- Status: ✅ Implementiert (Modular schaltbar)
+- Status: ✅ Implementiert (Granular schaltbar)
 
 ### A11Y-Integration (Reduce Motion)
-Globaler Master-Switch für Barrierefreiheit. Deaktiviert alle autonomen Animationen.
+Globaler Schieberegler für Barrierefreiheit. Dämpft oder deaktiviert alle autonomen Animationen.
 - Status: ✅ Implementiert (Modular schaltbar)
 
 ### Dynamisches Button-Anchoring
