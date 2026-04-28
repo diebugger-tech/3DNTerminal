@@ -16,20 +16,26 @@ pub struct TerminalParams<'a> {
     pub window_controls: Option<&'a crate::ui::window_controls::WindowControls>,
     pub active_corner: CornerPosition,
     pub cursor_pos: Point,
-    pub physics_enabled: bool,
+    pub physics_mode: crate::config::PhysicsMode,
     pub hamburger_open: bool,
+    pub notification: Option<&'a (String, Instant)>,
+    pub settings_open: bool,
+    pub tabs: &'a [String],
+    pub active_tab: usize,
+    pub action_flash: f32,
 }
 
 /// Reine 2D-Geometrie-Berechnung ohne Rotationswinkel
 pub fn calculate_geometry(params: &TerminalParams) -> (Rectangle, f32) {
     match params.phase {
         AnimationPhase::Collapsed => {
-            // Ein leichtes Schweben in der Ecke als 2D-Effekt (Physik-Check)
-            let hover = if params.physics_enabled {
-                let time = params.start_time.elapsed().as_secs_f32();
-                (time * 2.0).sin() * 4.0
-            } else {
-                0.0
+            // Ein leichtes Schweben in der Ecke als 2D-Effekt
+            let hover = match params.physics_mode {
+                crate::config::PhysicsMode::Breathe => {
+                    let time = params.start_time.elapsed().as_secs_f32();
+                    (time * 2.0).sin() * 4.0
+                }
+                _ => 0.0
             };
             let mut rect = params.corner_rect;
             rect.y += hover;
@@ -111,12 +117,27 @@ pub fn draw(
         ..Default::default()
     });
 
-    // Window Controls
+    // Action Flash (Glow Effekt)
+    if params.action_flash > 0.0 {
+        let flash_rect = Rectangle {
+            x: rect.x - 2.0,
+            y: rect.y - 2.0,
+            width: rect.width + 4.0,
+            height: rect.height + 4.0,
+        };
+        let flash_path = Path::rectangle(Point::new(flash_rect.x, flash_rect.y), Size::new(flash_rect.width, flash_rect.height));
+        frame.stroke(&flash_path, Stroke::default().with_color(Color::from_rgba(1.0, 0.6, 0.0, 0.4 * params.action_flash * alpha)).with_width(3.0));
+    }
+
+    // Window Controls & TabBar
     if let Some(controls) = params.window_controls {
         let btn_size = (rect.width * 0.03).clamp(12.0, 26.0);
         let left_anchor = Point::new(rect.x, rect.y);
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
         controls.draw(frame, alpha, left_anchor, right_anchor, btn_size, params.cursor_pos);
+        
+        // Modularer TabBar Aufruf
+        crate::ui::tab_bar::draw(frame, rect, alpha, params);
     }
 
     // Terminal Grid
@@ -147,7 +168,7 @@ pub fn draw(
 
         // Cursor zeichnen (wenn sichtbar)
         if params.cursor_visible && alpha > 0.0 {
-            let char_width = 8.0; // Geschätzte Breite für 13px Mono
+            let char_width = 8.0; 
             let line_height = 16.0;
             let cursor_x = start_x + (grid.cursor_x as f32 * char_width);
             let cursor_y = rect.y + margin_y + (font_size * 2.5) + (grid.cursor_y as f32 * line_height);
@@ -162,63 +183,48 @@ pub fn draw(
         }
     }
 
-    // Hamburger Menu Zeichnen (Blade Runner Style)
+    // Hamburger Menu (Blade Runner Style)
     if params.hamburger_open {
-        let menu_width = 280.0;
-        let menu_height = 420.0;
-        let menu_rect = Rectangle {
-            x: rect.x + 5.0,
-            y: rect.y + 45.0,
-            width: menu_width,
-            height: menu_height,
-        };
+        let menu_x = rect.x + 5.0;
+        let menu_y = rect.y + 45.0;
+        let menu_w = 280.0;
+        let menu_h = 420.0;
 
-        // Glass-Background mit Amber-Glow
-        let menu_path = Path::rectangle(Point::new(menu_rect.x, menu_rect.y), Size::new(menu_rect.width, menu_rect.height));
+        let menu_path = Path::rectangle(Point::new(menu_x, menu_y), Size::new(menu_w, menu_h));
         frame.fill(&menu_path, Color::from_rgba(0.02, 0.02, 0.05, 0.95 * alpha));
         frame.stroke(&menu_path, Stroke::default().with_color(Color::from_rgba(1.0, 0.6, 0.0, 0.4 * alpha)).with_width(1.5));
 
-        // Menü-Items
-        let items = [
-            ("⚙ Settings", "Modulare Engine Config"),
-            ("♿ Accessibility", "Physics Toggle & UI Scale"),
-            ("🎨 Themes", "Amber / Magenta / Cobalt"),
-            ("➕ New Tab", "Ollama Chat / System Monitor"),
-            ("🔍 Search", "Search Terminal Output"),
-            ("⌨ Shortcuts", "Keybindings & Aliases"),
-        ];
-
-        for (i, (label, sub)) in items.iter().enumerate() {
-            let item_y = menu_rect.y + 30.0 + (i as f32 * 60.0);
+        let items = crate::ui::hamburger_menu::HamburgerMenu::items();
+        for (i, item) in items.iter().enumerate() {
+            let item_y = menu_y + (i as f32 * 60.0);
+            let is_hovered = params.cursor_pos.x >= menu_x && params.cursor_pos.x <= menu_x + menu_w 
+                          && params.cursor_pos.y >= item_y && params.cursor_pos.y <= item_y + 60.0;
             
-            // Hover-Highlight
-            let item_rect = Rectangle {
-                x: menu_rect.x + 10.0,
-                y: item_y - 10.0,
-                width: menu_width - 20.0,
-                height: 50.0,
-            };
-            
-            if item_rect.contains(params.cursor_pos) {
-                let hover_path = Path::rectangle(Point::new(item_rect.x, item_rect.y), Size::new(item_rect.width, item_rect.height));
-                frame.fill(&hover_path, Color::from_rgba(1.0, 0.6, 0.0, 0.1 * alpha));
+            if is_hovered {
+                frame.fill(&Path::rectangle(Point::new(menu_x, item_y), Size::new(menu_w, 60.0)), Color::from_rgba(1.0, 0.6, 0.0, 0.1 * alpha));
             }
 
             frame.fill_text(cosmic::iced::widget::canvas::Text {
-                content: label.to_string(),
-                position: Point::new(menu_rect.x + 20.0, item_y),
-                color: Color::from_rgba(1.0, 0.8, 0.4, alpha),
+                content: item.label.to_string(),
+                position: Point::new(menu_x + 15.0, item_y + 25.0),
+                color: Color::from_rgba(1.0, 0.8, 0.2, alpha),
                 size: Pixels(18.0),
                 ..Default::default()
             });
-            
+
             frame.fill_text(cosmic::iced::widget::canvas::Text {
-                content: sub.to_string(),
-                position: Point::new(menu_rect.x + 20.0, item_y + 20.0),
-                color: Color::from_rgba(1.0, 0.6, 0.0, 0.5 * alpha),
+                content: item.subtitle.to_string(),
+                position: Point::new(menu_x + 15.0, item_y + 45.0),
+                color: Color::from_rgba(1.0, 0.6, 0.0, 0.6 * alpha),
                 size: Pixels(12.0),
                 ..Default::default()
             });
         }
     }
+
+    // Modularer Settings Aufruf
+    crate::ui::settings::draw(frame, rect, alpha, params);
+
+    // Modularer Notification Aufruf
+    crate::ui::notification::draw(frame, rect, alpha, params);
 }

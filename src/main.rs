@@ -54,6 +54,11 @@ pub struct App {
     drag_start_pos: Point,
     hovered_action: Option<ui::window_controls::ButtonAction>,
     hamburger_menu: ui::hamburger_menu::HamburgerMenu,
+    notification: Option<(String, Instant)>,
+    settings_open: bool,
+    tabs: Vec<String>,
+    active_tab: usize,
+    action_flash: f32,
 }
 
 impl canvas::Program<Message, Theme> for App {
@@ -78,8 +83,13 @@ impl canvas::Program<Message, Theme> for App {
                 window_controls: Some(&self.window_controls),
                 active_corner: self.active_corner,
                 cursor_pos: self.cursor_pos,
-                physics_enabled: self.config.physics_enabled,
+                physics_mode: self.config.physics_mode,
                 hamburger_open: self.hamburger_menu.is_open,
+                notification: self.notification.as_ref(),
+                settings_open: self.settings_open,
+                tabs: &self.tabs,
+                active_tab: self.active_tab,
+                action_flash: self.action_flash,
             };
             
             let (_, alpha) = ui::two_d::calculate_geometry(&params);
@@ -133,8 +143,13 @@ impl App {
             window_controls: None,
             active_corner: self.active_corner,
             cursor_pos: self.cursor_pos,
-            physics_enabled: self.config.physics_enabled,
+            physics_mode: self.config.physics_mode,
             hamburger_open: self.hamburger_menu.is_open,
+            notification: self.notification.as_ref(),
+            settings_open: self.settings_open,
+            tabs: &self.tabs,
+            active_tab: self.active_tab,
+            action_flash: self.action_flash,
         };
         let (rect, _alpha) = ui::two_d::calculate_geometry(&params);
         let btn_size = (rect.width * 0.03).clamp(12.0, 26.0);
@@ -189,6 +204,11 @@ impl Application for App {
             drag_start_pos: Point::ORIGIN,
             hovered_action: None,
             hamburger_menu: ui::hamburger_menu::HamburgerMenu::default(),
+            notification: None,
+            settings_open: false,
+            tabs: vec!["Terminal".to_string()],
+            active_tab: 0,
+            action_flash: 0.0,
         };
 
         let maximize_task = app.core.maximize(None, true);
@@ -238,7 +258,7 @@ impl Application for App {
                 }
 
                 // 5. Hamburger Menu Animation (A11Y Check)
-                if !self.config.physics_enabled {
+                if self.config.physics_mode == crate::config::PhysicsMode::Static {
                     let target_t = if self.hamburger_menu.is_open { 1.0 } else { 0.0 };
                     if (self.hamburger_menu.animation_t - target_t).abs() > 0.001 {
                         self.hamburger_menu.animation_t = target_t;
@@ -253,7 +273,21 @@ impl Application for App {
                         needs_redraw = true;
                     }
                 }
+                
+                // 6. Notification expiry (3 seconds)
+                if let Some((_, start)) = self.notification {
+                    if start.elapsed().as_secs_f32() > 3.0 {
+                        self.notification = None;
+                        needs_redraw = true;
+                    }
+                }
 
+                // 7. Action Flash Decay
+                if self.action_flash > 0.0 {
+                    self.action_flash = (self.action_flash - dt * 2.0).max(0.0);
+                    needs_redraw = true;
+                }
+                
                 if needs_redraw {
                     self.cache.clear();
                     // Reset grid dirty flag
@@ -341,14 +375,14 @@ impl Application for App {
                     self.drag_start_pos = pos;
                     self.cache.clear();
                 } else {
-                    let current_action = self.current_hit_test(self.cursor_pos);
+                    let current_action = self.current_hit_test(pos);
                     if current_action != self.hovered_action {
                         self.hovered_action = current_action;
                         self.cache.clear();
                     }
                 }
             }
-            Message::CanvasButtonPressed(btn, _pos) => {
+            Message::CanvasButtonPressed(btn, pos) => {
                 if btn == mouse::Button::Left {
                     // 1. Check if Menu is open and hit
                     if self.hamburger_menu.is_open {
@@ -361,59 +395,85 @@ impl Application for App {
                             cursor_visible: false,
                             window_controls: None,
                             active_corner: self.active_corner,
-                            cursor_pos: self.cursor_pos,
-                            physics_enabled: self.config.physics_enabled,
+                            cursor_pos: pos,
+                            physics_mode: self.config.physics_mode,
                             hamburger_open: true,
+                            notification: self.notification.as_ref(),
+                            settings_open: self.settings_open,
+                            tabs: &self.tabs,
+                            active_tab: self.active_tab,
+                            action_flash: self.action_flash,
                         };
                         let (rect, _) = ui::two_d::calculate_geometry(&params);
                         let menu_x = rect.x + 5.0;
                         let menu_y = rect.y + 45.0;
                         let menu_w = 280.0;
+                        let menu_h = 420.0;
                         
-                        if self.cursor_pos.x >= menu_x && self.cursor_pos.x <= menu_x + menu_w {
-                            let rel_y = self.cursor_pos.y - menu_y;
-                            if rel_y >= 0.0 && rel_y <= 420.0 {
+                        if pos.x >= menu_x && pos.x <= menu_x + menu_w {
+                            let rel_y = pos.y - menu_y;
+                            if rel_y >= 0.0 && rel_y <= menu_h {
                                 let index = (rel_y / 60.0) as usize;
-                                let actions = [
-                                    Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
-                                    Message::ToggleA11Y,
-                                    Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
-                                    Message::NewTab,
-                                    Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
-                                    Message::MenuAction(ui::hamburger_menu::MenuAction::ShowShortcuts),
-                                ];
-                                if let Some(msg) = actions.get(index) {
+                                let items = ui::hamburger_menu::HamburgerMenu::items();
+                                if let Some(item) = items.get(index) {
                                     self.hamburger_menu.is_open = false; // Auto-close
-                                    let msg_clone = msg.clone();
-                                    return Task::done(cosmic::Action::App(msg_clone));
+                                    let msg = match item.action {
+                                        ui::hamburger_menu::MenuAction::OpenSettings => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
+                                        ui::hamburger_menu::MenuAction::TogglePhysics => Message::ToggleA11Y,
+                                        ui::hamburger_menu::MenuAction::OpenThemePicker => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
+                                        ui::hamburger_menu::MenuAction::NewTab => Message::NewTab,
+                                        ui::hamburger_menu::MenuAction::SearchOutput => Message::MenuAction(ui::hamburger_menu::MenuAction::SearchOutput),
+                                        ui::hamburger_menu::MenuAction::ShowShortcuts => Message::MenuAction(ui::hamburger_menu::MenuAction::ShowShortcuts),
+                                    };
+                                    return Task::done(cosmic::Action::App(msg));
                                 }
                             }
                         }
                     }
 
                     // 2. Check Window Controls
-                    if let Some(action) = self.current_hit_test(self.cursor_pos) {
+                    if let Some(action) = self.current_hit_test(pos) {
                         return self.execute_button_action(action);
                     } else if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
-                        if self.center_rect.contains(self.cursor_pos) {
+                        if self.center_rect.contains(pos) {
                             self.is_dragging = true;
-                            self.drag_start_pos = self.cursor_pos;
+                            self.drag_start_pos = pos;
                         }
                     }
                 }
                 return Task::none();
             }
             Message::ToggleA11Y => {
-                self.config.physics_enabled = !self.config.physics_enabled;
-                tracing::info!("A11Y: Physics -> {}", self.config.physics_enabled);
+                self.config.physics_mode = match self.config.physics_mode {
+                    crate::config::PhysicsMode::Static => crate::config::PhysicsMode::Breathe,
+                    crate::config::PhysicsMode::Breathe => crate::config::PhysicsMode::Hologram3D,
+                    crate::config::PhysicsMode::Hologram3D => crate::config::PhysicsMode::Static,
+                };
+                self.notification = Some((format!("Physics Mode: {:?}", self.config.physics_mode), Instant::now()));
+                self.action_flash = 1.0;
+                tracing::info!("Physics: Mode -> {:?}", self.config.physics_mode);
                 self.cache.clear();
             }
             Message::MenuAction(action) => {
+                match action {
+                    ui::hamburger_menu::MenuAction::OpenSettings => {
+                        self.settings_open = !self.settings_open;
+                        self.action_flash = 0.8;
+                    }
+                    _ => {
+                        self.notification = Some((format!("Action: {:?}", action), Instant::now()));
+                    }
+                }
                 tracing::info!("Menu Action: {:?}", action);
                 self.cache.clear();
             }
             Message::NewTab => {
-                tracing::info!("Message: NewTab (Header or Menu)");
+                let tab_name = format!("Session {}", self.tabs.len() + 1);
+                self.tabs.push(tab_name.clone());
+                self.active_tab = self.tabs.len() - 1;
+                self.action_flash = 1.0;
+                self.notification = Some((format!("New Tab created: {}", tab_name), Instant::now()));
+                tracing::info!("Message: NewTab -> {}", tab_name);
                 self.cache.clear();
             }
             Message::ToggleHamburger => {

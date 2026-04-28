@@ -7,6 +7,14 @@ use std::env;
 use crate::error::AppError;
 use crate::constants::*;
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
+pub enum PhysicsMode {
+    Static,
+    #[default]
+    Breathe,
+    Hologram3D,
+}
+
 #[derive(Debug, Clone)]
 pub struct Config {
     pub max_scrollback: usize,
@@ -14,7 +22,7 @@ pub struct Config {
     pub neon_color: Color,
     pub flip_key: Key,
     pub font_size: f32,
-    pub physics_enabled: bool,
+    pub physics_mode: PhysicsMode,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -24,7 +32,7 @@ struct ConfigFile {
     pub font_size: Option<f32>,
     pub flip_key_name: Option<String>,
     pub neon_color_rgba: Option<[f32; 4]>,
-    pub physics_enabled: Option<bool>,
+    pub physics_mode: Option<PhysicsMode>,
 }
 
 impl Default for Config {
@@ -37,7 +45,7 @@ impl Default for Config {
             ),
             flip_key: Key::Named(Named::F12),
             font_size: DEFAULT_FONT_SIZE,
-            physics_enabled: true,
+            physics_mode: PhysicsMode::Breathe,
         }
     }
 }
@@ -118,7 +126,7 @@ impl Config {
                 if key_str == "F12" { builder = builder.flip_key(Key::Named(Named::F12)); }
                 // Expand key mapping later
             }
-            if let Some(pe) = parsed.physics_enabled { builder.config.physics_enabled = pe; }
+            if let Some(pm) = parsed.physics_mode { builder.config.physics_mode = pm; }
         }
         
         // 2. Try Env-Vars
