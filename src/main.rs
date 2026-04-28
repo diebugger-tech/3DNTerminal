@@ -593,6 +593,10 @@ impl Application for App {
                     self.active_button = on_button;
                     self.pressed_in_menu = on_menu;
 
+                    if on_button.is_some() || on_menu || self.active_overlay != OverlayMode::None {
+                        return Task::none();
+                    }
+
                     // Check for Resize Edges & Corners (All 4 sides)
                     let m = 12.0;
                     let on_l = effective_pos.x >= rect.x - m && effective_pos.x <= rect.x + m;
