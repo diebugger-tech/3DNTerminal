@@ -519,22 +519,35 @@ impl Application for App {
                     }
 
                     // Check for Corner-Grip (Bottom Right)
-                    if self.phase == AnimationPhase::Expanded {
-                        let grip_size = 30.0;
-                        let grip_rect = Rectangle::new(
-                            Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
-                            Size::new(grip_size, grip_size)
-                        );
-                        if grip_rect.contains(effective_pos) {
-                            self.is_corner_resizing = true;
-                            self.drag_start_pos = effective_pos;
-                            return Task::none();
+                    let grip_size = 30.0;
+                    let grip_rect = Rectangle::new(
+                        Point::new(rect.x + rect.width - grip_size, rect.y + rect.height - grip_size),
+                        Size::new(grip_size, grip_size)
+                    );
+                    if grip_rect.contains(effective_pos) {
+                        // Unpin from corner if resizing starts
+                        if self.active_corner != CornerPosition::Free {
+                            self.active_corner = CornerPosition::Free;
+                            self.phase = AnimationPhase::Expanded;
+                            self.progress = 1.0;
                         }
+                        self.is_corner_resizing = true;
+                        self.drag_start_pos = effective_pos;
+                        return Task::none();
                     }
 
-                    if self.active_corner == CornerPosition::Free && self.phase == AnimationPhase::Expanded {
-                        self.is_dragging = true;
-                        self.drag_start_pos = effective_pos;
+                    // Dragging initialization
+                    self.is_dragging = true;
+                    self.drag_start_pos = effective_pos;
+                    
+                    // Unpin from corner if dragging starts
+                    if self.active_corner != CornerPosition::Free {
+                        self.active_corner = CornerPosition::Free;
+                        self.phase = AnimationPhase::Expanded;
+                        self.progress = 1.0;
+                        // Important: Snap center_rect to the current animated rect position
+                        // so it doesn't jump to the middle of the screen
+                        self.center_rect = rect;
                     }
                 }
                 return Task::none();
