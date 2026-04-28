@@ -12,6 +12,7 @@ pub enum MenuAction {
     NewTab,
     SearchOutput,
     ShowShortcuts,
+    ExecuteSkill(&'static str),
 }
 
 pub struct MenuItem {
@@ -25,14 +26,22 @@ impl HamburgerMenu {
         Self::default()
     }
 
-    pub fn items() -> Vec<MenuItem> {
-        vec![
-            MenuItem { label: "⚙ Settings", subtitle: "Modulare Engine Config", action: MenuAction::OpenSettings },
-            MenuItem { label: "⚛ Physics", subtitle: "Toggle breathing & effects", action: MenuAction::TogglePhysics },
-            MenuItem { label: "🎨 Themes", subtitle: "Amber / Magenta / Cobalt", action: MenuAction::OpenThemePicker },
-            MenuItem { label: "➕ New Tab", subtitle: "Ollama Chat / System Monitor", action: MenuAction::NewTab },
-            MenuItem { label: "🔍 Search", subtitle: "Search Terminal Output", action: MenuAction::SearchOutput },
-            MenuItem { label: "⌨ Shortcuts", subtitle: "Keybindings & Aliases", action: MenuAction::ShowShortcuts },
-        ]
+    pub fn items(skills: &[Box<dyn crate::ui::skill::TerminalSkill>]) -> Vec<MenuItem> {
+        let mut menu = Vec::new();
+        
+        for skill in skills {
+            menu.push(MenuItem {
+                label: skill.label(),
+                subtitle: skill.subtitle(),
+                action: MenuAction::ExecuteSkill(skill.id()),
+            });
+        }
+        
+        // Add hardcoded global actions at the end
+        menu.push(MenuItem { label: "➕ New Tab", subtitle: "Ollama Chat / System Monitor", action: MenuAction::NewTab });
+        menu.push(MenuItem { label: "🔍 Search", subtitle: "Search Terminal Output", action: MenuAction::SearchOutput });
+        menu.push(MenuItem { label: "⌨ Shortcuts", subtitle: "Keybindings & Aliases", action: MenuAction::ShowShortcuts });
+        
+        menu
     }
 }

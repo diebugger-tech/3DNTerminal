@@ -46,21 +46,16 @@ pub fn draw(
         ..Default::default()
     });
 
-    // Content based on mode
-    match params.active_overlay {
-        OverlayMode::Settings | OverlayMode::Physics => {
-            draw_physics_info(frame, settings_rect, alpha, params);
-        }
-        OverlayMode::Themes => {
-            draw_themes_info(frame, settings_rect, alpha, params);
-        }
-        OverlayMode::Shortcuts => {
-            draw_shortcuts_info(frame, settings_rect, alpha, params);
-        }
-        OverlayMode::Search => {
-            draw_search_info(frame, settings_rect, alpha, params);
-        }
-        _ => {}
+    // Delegate to Skill
+    let id = match params.active_overlay {
+        OverlayMode::Settings => "settings",
+        OverlayMode::Physics => "physics",
+        OverlayMode::Themes => "themes",
+        _ => "",
+    };
+
+    if let Some(skill) = params.skills.iter().find(|s| s.id() == id) {
+        skill.draw_overlay(frame, settings_rect, alpha, params);
     }
 }
 

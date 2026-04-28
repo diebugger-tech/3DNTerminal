@@ -20,6 +20,7 @@ pub struct TerminalParams<'a> {
     pub hamburger_open: bool,
     pub notification: Option<&'a (String, Instant)>,
     pub active_overlay: crate::ui::overlay::OverlayMode,
+    pub skills: &'a [Box<dyn crate::ui::skill::TerminalSkill>],
     pub tabs: &'a [String],
     pub active_tab: usize,
     pub action_flash: f32,
@@ -200,7 +201,7 @@ pub fn draw(
         frame.fill(&menu_path, Color::from_rgba(0.02, 0.02, 0.05, 0.95 * alpha));
         frame.stroke(&menu_path, Stroke::default().with_color(Color::from_rgba(1.0, 0.6, 0.0, 0.4 * alpha)).with_width(1.5));
 
-        let items = crate::ui::hamburger_menu::HamburgerMenu::items();
+        let items = crate::ui::hamburger_menu::HamburgerMenu::items(params.skills);
         for (i, item) in items.iter().enumerate() {
             let item_y = menu_y + (i as f32 * 60.0);
             let is_hovered = params.cursor_pos.x >= menu_x && params.cursor_pos.x <= menu_x + menu_w 

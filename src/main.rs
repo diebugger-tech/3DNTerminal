@@ -18,6 +18,7 @@ use cosmic::{
 use threednterminal::terminal::traits::Terminal;
 use threednterminal::{terminal, ui, config, AnimationPhase, CornerPosition};
 use threednterminal::ui::overlay::OverlayMode;
+use threednterminal::ui::skill::TerminalSkill;
 use threednterminal::app::events::Message;
 
 use std::time::{Instant, Duration};
@@ -57,6 +58,7 @@ pub struct App {
     hamburger_menu: ui::hamburger_menu::HamburgerMenu,
     notification: Option<(String, Instant)>,
     active_overlay: OverlayMode,
+    skills: Vec<Box<dyn TerminalSkill>>,
     tabs: Vec<String>,
     active_tab: usize,
     action_flash: f32,
@@ -88,6 +90,7 @@ impl canvas::Program<Message, Theme> for App {
                 hamburger_open: self.hamburger_menu.is_open,
                 notification: self.notification.as_ref(),
                 active_overlay: self.active_overlay,
+                skills: &self.skills,
                 tabs: &self.tabs,
                 active_tab: self.active_tab,
                 action_flash: self.action_flash,
@@ -149,6 +152,7 @@ impl App {
             hamburger_open: self.hamburger_menu.is_open,
             notification: self.notification.as_ref(),
             active_overlay: self.active_overlay,
+            skills: &self.skills,
             tabs: &self.tabs,
             active_tab: self.active_tab,
             action_flash: self.action_flash,
@@ -160,6 +164,18 @@ impl App {
         let right_anchor = Point::new(rect.x + rect.width, rect.y);
         
         self.window_controls.hit_test(pos, left_anchor, right_anchor, btn_size)
+    }
+}
+
+impl App {
+    fn get_active_skill(&self) -> Option<&dyn TerminalSkill> {
+        let id = match self.active_overlay {
+            OverlayMode::Settings => "settings",
+            OverlayMode::Physics => "physics",
+            OverlayMode::Themes => "themes",
+            _ => return None,
+        };
+        self.skills.iter().find(|s| s.id() == id).map(|s| s.as_ref())
     }
 }
 
@@ -209,6 +225,7 @@ impl Application for App {
             hamburger_menu: ui::hamburger_menu::HamburgerMenu::default(),
             notification: None,
             active_overlay: OverlayMode::None,
+            skills: ui::skills::get_all_skills(),
             tabs: vec!["Terminal".to_string()],
             active_tab: 0,
             action_flash: 0.0,
@@ -406,6 +423,23 @@ impl Application for App {
                             height: 40.0,
                         };
                         
+                        // 1. Dispatch to active skill if it handles clicks
+                        let active_skill_id = match self.active_overlay {
+                            OverlayMode::Settings => Some("settings"),
+                            OverlayMode::Physics => Some("physics"),
+                            OverlayMode::Themes => Some("themes"),
+                            _ => None,
+                        };
+
+                        if let Some(id) = active_skill_id {
+                            if let Some(skill) = self.skills.iter().find(|s| s.id() == id) {
+                                if skill.on_click(pos, settings_rect, &mut self.config) {
+                                    self.cache.clear();
+                                    return Task::none();
+                                }
+                            }
+                        }
+
                         if x_btn_rect.contains(pos) || !settings_rect.contains(pos) {
                             self.active_overlay = OverlayMode::None;
                             self.cache.clear();
@@ -450,6 +484,7 @@ impl Application for App {
                         hamburger_open: self.hamburger_menu.is_open,
                         notification: self.notification.as_ref(),
                         active_overlay: self.active_overlay,
+                        skills: &self.skills,
                         tabs: &self.tabs,
                         active_tab: self.active_tab,
                         action_flash: self.action_flash,
@@ -500,6 +535,7 @@ impl Application for App {
                             hamburger_open: true,
                             notification: self.notification.as_ref(),
                             active_overlay: self.active_overlay,
+                            skills: &self.skills,
                             tabs: &self.tabs,
                             active_tab: self.active_tab,
                             action_flash: self.action_flash,
@@ -515,10 +551,11 @@ impl Application for App {
                             let rel_y = pos.y - menu_y;
                             if rel_y >= 0.0 && rel_y <= menu_h {
                                 let index = (rel_y / 60.0) as usize;
-                                let items = ui::hamburger_menu::HamburgerMenu::items();
+                                let items = ui::hamburger_menu::HamburgerMenu::items(params.skills);
                                 if let Some(item) = items.get(index) {
                                     self.hamburger_menu.is_open = false; // Auto-close
                                     let msg = match item.action {
+                                        ui::hamburger_menu::MenuAction::ExecuteSkill(id) => Message::MenuAction(ui::hamburger_menu::MenuAction::ExecuteSkill(id)),
                                         ui::hamburger_menu::MenuAction::OpenSettings => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenSettings),
                                         ui::hamburger_menu::MenuAction::TogglePhysics => Message::MenuAction(ui::hamburger_menu::MenuAction::TogglePhysics),
                                         ui::hamburger_menu::MenuAction::OpenThemePicker => Message::MenuAction(ui::hamburger_menu::MenuAction::OpenThemePicker),
@@ -557,6 +594,16 @@ impl Application for App {
             }
             Message::MenuAction(action) => {
                 match action {
+                    ui::hamburger_menu::MenuAction::ExecuteSkill(id) => {
+                        let overlay = match id {
+                            "settings" => OverlayMode::Settings,
+                            "physics" => OverlayMode::Physics,
+                            "themes" => OverlayMode::Themes,
+                            _ => OverlayMode::None,
+                        };
+                        self.active_overlay = if self.active_overlay == overlay { OverlayMode::None } else { overlay };
+                        self.action_flash = 0.8;
+                    }
                     ui::hamburger_menu::MenuAction::OpenSettings => {
                         self.active_overlay = if self.active_overlay == OverlayMode::Settings { OverlayMode::None } else { OverlayMode::Settings };
                         self.action_flash = 0.8;

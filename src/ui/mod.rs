@@ -8,3 +8,5 @@ pub mod settings;
 pub mod tab_bar;
 pub mod notification;
 pub mod overlay;
+pub mod skill;
+pub mod skills;
