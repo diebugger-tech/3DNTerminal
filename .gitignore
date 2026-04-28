@@ -1,8 +1,29 @@
-/target/
+# Rust
+/target
 Cargo.lock
-*.swp
-*.swo
-*~
-.DS_Store
+
+# IDEs & OS
 .vscode/
 .idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Backups & Sensitive Data (User Rules)
+*.bak
+PRIVATE_ROADMAP.md
+ANNOUNCEMENT_DRAFTS.md
+.env
+*.log
+
+# AI Agents & Knowledge Base
+knowledge/
+.gemini/
+.claude/
+.agents/
+
+# Python (if any scripts are added)
+__pycache__/
+*.py[cod]
+*$py.class
