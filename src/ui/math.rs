@@ -1,6 +1,6 @@
 //! UI utility functions and 3D mathematics.
 
-use cosmic::iced::Point;
+use cosmic::iced::{Point, Rectangle};
 
 /// Easing Helper for smooth animations.
 /// Approximates a cubic bezier curve (0.16, 1, 0.3, 1).
@@ -48,4 +48,14 @@ pub fn project_onto_quad(p: Point, quad: &[Point; 4]) -> Option<(f32, f32)> {
     let v = (v_left + v_right) / 2.0;
     
     Some((u.clamp(0.0, 1.0), v.clamp(0.0, 1.0)))
+}
+
+/// Smoothly interpolates between two rectangles.
+pub fn lerp_rect(a: Rectangle, b: Rectangle, t: f32) -> Rectangle {
+    Rectangle {
+        x: a.x + (b.x - a.x) * t,
+        y: a.y + (b.y - a.y) * t,
+        width: a.width + (b.width - a.width) * t,
+        height: a.height + (b.height - a.height) * t,
+    }
 }
