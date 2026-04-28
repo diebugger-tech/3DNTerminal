@@ -4,6 +4,7 @@
 ## System
 - OS: NixOS + Cosmic Desktop (Wayland)
 - Alias: `3dn` = `nix develop --command cargo run --bin 3dnterm`
+- Hashtags: `#rust`, `#cosmic`, `#terminal`, `#barrierefrei`
 
 ## Stack
 - Rust (iced + libcosmic + alacritty_terminal)
@@ -12,35 +13,35 @@
 ---
 
 ## 🛡️ STABILITY MODE (VALIDIERT)
-- **Status**: Phase 3.6 - Advanced A11Y & Fine-grained Physics implementiert.
+- **Status**: Phase 3.6 — Finaler Release Kandidat (RC1).
 - **Architektur**: 
   - Modularer `TerminalSkill`-Trait für alle internen Module.
-  - **Clean Navigation**: Hamburger-Menü als minimalistischer Starter (ohne Widgets).
-  - **Dashboards**: Feingliedrige Steuerung via Toggle-Switches und Slidern in den Skill-Overlays.
-  - **A11ySkill**: Inklusions-Zentrum mit Tremor-Filter und Farbtransformationen.
-  - **Config v3**: Granulare Steuerung für jeden Effekt.
+  - **Clean Navigation**: Hamburger-Menü als minimalistischer Starter.
+  - **A11ySkill (Vollständig)**: Tremor-Filter, Farbblindheits-Transformationen, Motion-Reduction.
+  - **Physics Engine**: Magnetischer Fokus + Breathe-Physik.
+  - **Global Filter**: Alle UI-Elemente werden konsistent durch das A11Y-System transformiert.
 
 ---
 
 ## ✅ BEHOBENE BUGS (PHASE 3)
 
 ### Bug 6: Starre Overlay-Logik
-- **Fix**: Migration von hartcodierten Overlays auf ein dynamisches Skill-System.
-- **Interaktivität**: Granulare Steuerung via Canvas-Widgets (Slider/Toggles) in den Skill-Overlays.
-- **Physik**: Vollständige Modularisierung von Breathe- und A11Y-Effekten.
+- **Fix**: Dynamisches Skill-System mit Dashboard-Overlays implementiert.
+- **Interaktivität**: Moderne Toggle-Switches (Slider-Look) in den Untermenüs.
 
 ---
 
 ## 🎮 UI-LOGIK (PHASE 3)
 
 ### 1. Skill-System (Plugins)
-- **Trait**: `TerminalSkill` definiert `draw_overlay`, `draw_menu_extension` und Klick-Handler.
-- **Dynamik**: Das Hamburger-Menü baut sich automatisch aus allen registrierten Skills auf.
-- **Widgets**: Skills nutzen `draw_slider` und `draw_toggle` für feingliedrige Einstellungen.
+- **Trait**: `TerminalSkill` definiert das Verhalten der Dashboards.
+- **Widgets**: Eigene Canvas-Widgets für Slider und Schalter.
 
 ### 2. Tremor-Kompensation
-- **Logik**: Low-Pass-Filter in `main.rs` glättet `cursor_pos` basierend auf `a11y.tremor_damping`.
-- **Effekt**: Verhindert unabsichtliche Klicks und stabilisiert das Hover-Feedback.
+- **Logik**: Low-Pass-Filter in `main.rs` glättet `cursor_pos` via `a11y.tremor_damping`.
+
+### 3. Magnetic Focus
+- **Logik**: `lerp_rect` in `math.rs` für sanfte Fensterbewegungen zum Cursor hin.
 
 ---
 

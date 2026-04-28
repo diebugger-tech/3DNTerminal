@@ -1,40 +1,53 @@
-# 3DNTerminal
+# 3DNTerminal v0.3.6
 
-*Less app, more atmosphere.*
+> *Less app, more atmosphere. More inclusive, more alive.*
+
+`#rust` `#cosmic` `#terminal` `#barrierefrei` `#accessibility` `#wayland`
 
 A floating, translucent terminal built with Rust and libcosmic, designed for the COSMIC Desktop. It belongs to your desktop—floating, fading, and staying out of the way until you need it.
 
-## Features
+---
 
-- **Holographic Rendering**: Translucent UI with neon glow and organic "Breathe" animation.
-- **Modular Skill System**: Extensible architecture for themes, physics, and settings.
-- **Advanced A11Y**: 
-  - **Tremor Compensation**: Low-pass filter for smooth cursor interaction.
-  - **Color Filters**: Real-time transformations for Protanopia, Deuteranopia, and Tritanopia.
-  - **Motion Reduction**: Granular control over animation damping.
-- **Fine-grained Physics**: Individual dashboards for Breathe intensity and Magnetic radius.
-- **Adaptive Layout**: Snaps to all four screen corners with smooth 3D transitions.
-- **Multi-Session**: Tab-based terminal sessions.
-- **Wayland Native**: Built on iced and libcosmic for modern Linux desktops.
+## 🌈 Accessibility First (Barrierefrei)
 
-## Architecture
+3DNTerminal isn't just about looks. We believe power tools should be inclusive.
+- **Tremor Compensation**: Integrated low-pass filter to smooth out shaky cursor movements, making the UI easier to navigate for users with motor impairments.
+- **Vision Filters**: Real-time color transformations for **Protanopia**, **Deuteranopia**, and **Tritanopia**.
+- **Motion Reduction**: Granular control over animation damping to accommodate users sensitive to motion.
 
-3DNTerminal follows a modular **Skill-based architecture**:
-- **Core**: Handles PTY, grid rendering, and window state.
-- **Skills**: Pluggable modules (Settings, Physics, Themes, A11Y) that extend the UI and logic.
-- **Navigation**: The Hamburger menu acts as a starter, while Skill Overlays provide detailed control dashboards.
+## 🧲 Physics-based UI
+
+- **Magnetic Focus**: The entire window reacts organically to your cursor proximity, giving the UI a "physical" presence on your desktop.
+- **Sinusoidal "Breathe"**: Organic hovering animations in the collapsed state.
+- **Holographic Rendering**: Glassmorphism effects with adaptive neon glow.
+
+## 🧩 Modular Skill System
+
+Extend the terminal with your own logic:
+- **Skills**: Pluggable modules for Themes, Physics, and A11Y.
+- **Dashboards**: Clean Hamburger navigation with detailed sub-menu control centers.
+
+## 🚀 Roadmap
+
+- [ ] Full Alacritty PTY/Shell Integration (v0.4.0)
+- [ ] AI-Assisted Terminal Skills (Ollama Integration)
+- [ ] Screen Reader & TTS Support
+- [ ] Bidirectional Knowledge Sync (Obsidian/SurrealDB)
 
 ## Installation
 
 ### Prerequisites
 - **NixOS** or **Nix** with Flakes enabled.
-- **COSMIC Desktop** (recommended for native experience).
+- **COSMIC Desktop**.
 
 ### Build & Run
 ```bash
 nix develop
 cargo run --bin 3dnterm
 ```
+
+## Contributing
+We love community contributions! Check out [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 ## License
 Licensed under the [Apache License, Version 2.0](LICENSE).
